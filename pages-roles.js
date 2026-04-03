@@ -4,18 +4,18 @@
 function tenantDashboard() {
   return '<div class="pg-h"><h1>Welcome back, Sarah!</h1><p>Cambridge A201 \u2022 Lease active until 31 Aug 2026</p></div>' +
     '<div class="stats">' +
-    cStat('fa-receipt','#6C5CE7','RM 280','Rent Due','01 Apr','','navigateTo(\"my-bills\")') +
-    cStat('fa-calendar-check','#00B894','153','Days Remaining','','up','navigateTo(\"my-contract\")') +
-    cStat('fa-wrench','#FDCB6E','1','Open Requests','','','navigateTo(\"maintenance\")') +
-    cStat('fa-star','#FD79A8','4.8','Community Score','','up','navigateTo(\"community\")') +
+    cStat('fa-receipt','#6C5CE7','RM 280','Rent Due','01 Apr','','navigateTo(\'my-bills\')') +
+    cStat('fa-calendar-check','#00B894','153','Days Remaining','','up','navigateTo(\'my-contract\')') +
+    cStat('fa-wrench','#FDCB6E','1','Open Requests','','','navigateTo(\'maintenance\')') +
+    cStat('fa-star','#FD79A8','4.8','Community Score','','up','navigateTo(\'community\')') +
     '</div><div class="g2">' +
     panel('Quick Actions', '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
       qActionClick('fa-credit-card','#6C5CE7','Pay Rent','Due in 3 days','payMyRent()') +
       qActionClick('fa-wrench','#FDCB6E','New Request','Maintenance','addTicketModal()') +
-      qActionClick('fa-key','#00B894','Door Access','Smart Lock','navigateTo(\"smart-access\")') +
+      qActionClick('fa-key','#00B894','Door Access','Smart Lock','navigateTo(\'smart-access\')') +
       qActionClick('fa-bolt','#74B9FF','Utility Bills','View & pay','tenantViewUtilityBills()') +
       qActionClick('fa-clipboard-check','#00CEC9','Check-In/Out','Photo evidence','showMyCheckInOutList()') +
-      qActionClick('fa-comments','#FD79A8','Community','3 new posts','navigateTo(\"community\")') + '</div>') +
+      qActionClick('fa-comments','#FD79A8','Community','3 new posts','navigateTo(\'community\')') + '</div>') +
     panel('My Bills', tenantBillsHtml()) +
     '</div><div class="g2">' +
     panel('Upcoming Events', eventsHtml()) +
@@ -207,11 +207,11 @@ function landlordDashboard() {
   const ll = getCurrentLandlord();
   return '<div class="pg-h"><h1>Portfolio Dashboard</h1><p>Welcome, ' + escHtml(ll.n) + '</p></div>' +
     '<div class="stats">' +
-    cStat('fa-building','#FD79A8', ll.props.length, 'Properties','','','navigateTo(\"my-properties\")') +
-    cStat('fa-door-open','#6C5CE7', ll.units, 'Total Units','','','navigateTo(\"my-properties\")') +
-    cStat('fa-chart-pie','#00CEC9', ll.occ + '%', 'Occupancy','+3%','up','navigateTo(\"reports\")') +
-    cStat('fa-money-bill-wave','#00B894', ll.rev, 'Monthly Revenue','+8%','up','navigateTo(\"financials\")') +
-    cStat('fa-wallet','#FDCB6E', ll.payout, 'Est. Payout','','up','navigateTo(\"payouts\")') +
+    cStat('fa-building','#FD79A8', ll.props.length, 'Properties','','','navigateTo(\'my-properties\')') +
+    cStat('fa-door-open','#6C5CE7', ll.units, 'Total Units','','','navigateTo(\'my-properties\')') +
+    cStat('fa-chart-pie','#00CEC9', ll.occ + '%', 'Occupancy','+3%','up','navigateTo(\'reports\')') +
+    cStat('fa-money-bill-wave','#00B894', ll.rev, 'Monthly Revenue','+8%','up','navigateTo(\'financials\')') +
+    cStat('fa-wallet','#FDCB6E', ll.payout, 'Est. Payout','','up','navigateTo(\'payouts\')') +
     '</div><div class="g2">' +
     panel('My Properties', landlordPropsHtml(ll)) +
     panel('Recent Payouts', landlordPayoutsHtml()) +
