@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeStay Coliving — Management Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<link href="styles.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- ============ LOGIN PAGE ============ -->
+<div class="login-page" id="loginPage">
+  <div class="login-box">
+    <div class="login-header">
+      <div class="login-logo">W</div>
+      <h1>WeStay Platform</h1>
+      <p>Comprehensive Property Management &amp; Collaboration</p>
+    </div>
+    <div class="login-card">
+      <h3>Select Your Role to Continue</h3>
+      <div class="role-grid" id="roleGrid">
+        <div class="role-btn op active" data-role="operator">
+          <div class="role-icon"><i class="fas fa-cogs"></i></div>
+          <div class="role-name">Operator</div>
+          <div class="role-desc">Manage all properties &amp; operations</div>
+        </div>
+        <div class="role-btn tn" data-role="tenant">
+          <div class="role-icon"><i class="fas fa-user"></i></div>
+          <div class="role-name">Tenant</div>
+          <div class="role-desc">Pay rent, request maintenance</div>
+        </div>
+        <div class="role-btn ll" data-role="landlord">
+          <div class="role-icon"><i class="fas fa-home"></i></div>
+          <div class="role-name">Landlord</div>
+          <div class="role-desc">View property performance &amp; payouts</div>
+        </div>
+        <div class="role-btn vn" data-role="vendor">
+          <div class="role-icon"><i class="fas fa-tools"></i></div>
+          <div class="role-name">Vendor</div>
+          <div class="role-desc">Manage work orders &amp; invoices</div>
+        </div>
+        <div class="role-btn ag" data-role="agent">
+          <div class="role-icon"><i class="fas fa-user-tie"></i></div>
+          <div class="role-name">Agent</div>
+          <div class="role-desc">Manage leads &amp; tenancy listings</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" id="loginEmail" placeholder="your@email.com" value="demo@westay.my">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="Enter your password" value="demo1234">
+        <div class="hint">Demo: any email + any password works</div>
+      </div>
+      <div class="login-opts">
+        <label><input type="checkbox" checked> Remember me</label>
+        <a>Forgot password?</a>
+      </div>
+      <button class="btn-login" id="loginBtn"><i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In</button>
+      <div class="login-footer">
+        Don't have an account? <a>Contact your property manager</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL (hidden until login) ============ -->
+<div id="appShell" class="hidden">
+
+<!-- ============ SIDEBAR ============ -->
+<aside class="sidebar" id="sidebar"></aside>
+
+<!-- ============ HEADER ============ -->
+<header class="header">
+  <div class="h-search">
+    <i class="fas fa-search"></i>
+    <input type="text" placeholder="Search tenants, properties, invoices... (Ctrl+K)" oninput="doSearch(this.value)" onfocus="if(this.value)doSearch(this.value)" id="globalSearch">
+  </div>
+  <div class="h-right">
+    <span class="role-tag" id="roleTag"></span>
+    <div class="h-btn" onclick="toggleNotifPanel()"><i class="fas fa-bell"></i><div class="notif-dot"></div></div>
+    <div class="h-btn" onclick="document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()"><i class="fas fa-expand"></i></div>
+    <div class="h-btn" style="background:var(--p);border-color:var(--p);color:#fff" onclick="quickAdd()"><i class="fas fa-plus"></i></div>
+  </div>
+</header>
+
+<!-- ============ MAIN CONTENT ============ -->
+<main class="main" id="mainContent"></main>
+
+<!-- ============ AI CHATBOT ============ -->
+<div class="ai-fab" id="aiFab" title="WeStay AI Assistant"><i class="fas fa-robot"></i></div>
+<div class="ai-box" id="aiBox">
+  <div class="ai-hdr">
+    <div class="ai-av"><i class="fas fa-robot"></i></div>
+    <h4>WeStay AI</h4>
+    <span class="ai-on">&#9679; Online</span>
+    <div class="ai-x" id="aiX"><i class="fas fa-times"></i></div>
+  </div>
+  <div class="ai-msgs" id="aiMsgs">
+    <div class="ai-m bot">Hi! I'm <strong>WeStay AI</strong> &#x1F916; I can help with tenant queries, generate reports, check occupancy, or suggest optimizations. Try asking:<br><br>&bull; "How's occupancy?"<br>&bull; "Who hasn't paid?"<br>&bull; "Open maintenance tickets?"</div>
+  </div>
+  <div class="ai-inp">
+    <input type="text" id="aiIn" placeholder="Ask me anything...">
+    <button id="aiSnd"><i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+</div><!-- end appShell -->
+
+<script src="data.js"></script>
+<script src="roles.js"></script>
+<script src="helpers.js"></script>
+<script src="interactions.js"></script>
+<script src="crud.js"></script>
+<script src="automations.js"></script>
+<script src="pages-operator.js"></script>
+<script src="pages-roles.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

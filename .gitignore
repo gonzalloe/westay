@@ -1,0 +1,12 @@
+# WorkBuddy local config
+.workbuddy/
+
+# Node
+node_modules/
+
+# Server (not needed for GitHub Pages)
+server.js
+
+# OS files
+Thumbs.db
+.DS_Store
