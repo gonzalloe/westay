@@ -31,7 +31,8 @@ const TICKETS = [
 ];
 
 const BILLS = [
-  { id:'INV-2604', t:'Sarah Lim', a:'RM 280', s:'Paid', d:'01 Apr 2026', prop:'Cambridge' },
+  { id:'INV-2604', t:'Sarah Lim', a:'RM 280', s:'Paid', d:'01 Mar 2026', prop:'Cambridge' },
+  { id:'INV-2605', t:'Sarah Lim', a:'RM 280', s:'Pending', d:'01 Apr 2026', prop:'Cambridge' },
   { id:'INV-2603', t:'James Wong', a:'RM 190', s:'Overdue', d:'01 Apr 2026', prop:'Harvard' },
   { id:'INV-2602', t:'Priya Devi', a:'RM 250', s:'Paid', d:'01 Apr 2026', prop:'Imperial' },
   { id:'INV-2601', t:'Raj Kumar', a:'RM 200', s:'Pending', d:'05 Apr 2026', prop:'Manchester' },
@@ -131,7 +132,14 @@ const PROPERTY_EXPENSES = {
 };
 
 // ============ TENANT UTILITY BILLS (generated) ============
-const UTILITY_BILLS = [];
+const UTILITY_BILLS = [
+  { id:'UTL-2604-01', tenant:'Sarah Lim', unit:'Cambridge', room:'A201', period:'Apr 2026',
+    electric:{ kwh:145, amount:31.61 }, water:{ m3:3.2, amount:1.82 }, internet:30, sewerage:8,
+    total:71.43, status:'Pending', generated:'2026-04-01', due:'2026-04-15' },
+  { id:'UTL-2603-01', tenant:'Sarah Lim', unit:'Cambridge', room:'A201', period:'Mar 2026',
+    electric:{ kwh:132, amount:28.78 }, water:{ m3:2.8, amount:1.60 }, internet:30, sewerage:8,
+    total:68.38, status:'Paid', generated:'2026-03-01', due:'2026-03-15' }
+];
 
 // ============ CHECK-IN/CHECK-OUT RECORDS ============
 const CHECKINOUT_RECORDS = [
