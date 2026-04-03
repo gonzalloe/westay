@@ -12,6 +12,7 @@ const ROLE_CONFIG = {
         { id:'dashboard', icon:'fa-th-large', label:'Dashboard', badge:null },
         { id:'properties', icon:'fa-building', label:'Properties', badge:null },
         { id:'tenants', icon:'fa-users', label:'Tenants', badge:'342' },
+        { id:'landlords', icon:'fa-user-tie', label:'Landlords', badge:String(LANDLORDS.length) },
         { id:'contracts', icon:'fa-file-contract', label:'Contracts', badge:'4' }
       ]},
       { section: 'OPERATIONS', items: [

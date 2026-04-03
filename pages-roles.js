@@ -14,7 +14,7 @@ function tenantDashboard() {
       qActionClick('fa-wrench','#FDCB6E','New Request','Maintenance','addTicketModal()') +
       qActionClick('fa-key','#00B894','Door Access','Smart Lock','navigateTo(\"smart-access\")') +
       qActionClick('fa-bolt','#74B9FF','Utility Bills','View & pay','tenantViewUtilityBills()') +
-      qActionClick('fa-clipboard-check','#00CEC9','Check-In/Out','Photo evidence','showCheckInOutList()') +
+      qActionClick('fa-clipboard-check','#00CEC9','Check-In/Out','Photo evidence','showMyCheckInOutList()') +
       qActionClick('fa-comments','#FD79A8','Community','3 new posts','navigateTo(\"community\")') + '</div>') +
     panel('My Bills', tenantBillsHtml()) +
     '</div><div class="g2">' +
@@ -83,14 +83,12 @@ function tenantMaintenance() {
 function tenantSmartAccess() {
   const lc = lockState === 'Locked' ? '#00B894' : '#FDCB6E';
   const li = lockState === 'Locked' ? 'fa-lock' : 'fa-lock-open';
-  const lb = lockState === 'Locked' ? '<i class="fas fa-lock-open"></i> Unlock Door' : '<i class="fas fa-lock"></i> Lock Door';
   return '<div class="pg-h pg-row"><div><h1>Smart Access</h1><p>Your digital key</p></div>' +
-    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showCheckInOutList()"><i class="fas fa-clipboard-check"></i> Check-In/Out Photos</button></div>' +
+    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showMyCheckInOutList()"><i class="fas fa-clipboard-check"></i> My Check-In/Out Photos</button></div>' +
     '<div class="g2">' +
     panel('My Door Lock', '<div class="lock-card" style="padding:30px"><div class="lock-icon" style="font-size:48px;color:' + lc + '"><i class="fas ' + li + '"></i></div>' +
       '<div class="lock-status" style="background:' + lc + '22;color:' + lc + ';margin:14px 0">' + lockState + '</div>' +
-      '<div class="lock-name">Cambridge A201</div><div class="lock-meta">Last accessed: 2 hours ago</div>' +
-      '<button class="btn btn-p" style="margin-top:16px;width:100%" onclick="toggleSmartLock()">' + lb + '</button></div>') +
+      '<div class="lock-name">Cambridge A201</div><div class="lock-meta">Last accessed: 2 hours ago</div></div>') +
     panel('Access Log', '<div class="timeline-item"><div class="tl-time">Today 18:30</div><div class="tl-text">Door locked (auto)</div></div>' +
       '<div class="timeline-item"><div class="tl-time">Today 16:45</div><div class="tl-text">Door unlocked (app)</div></div>' +
       '<div class="timeline-item"><div class="tl-time">Today 08:20</div><div class="tl-text">Door locked (manual)</div></div>' +
@@ -108,8 +106,7 @@ function tenantUtilities() {
       ' Other rooms in the unit are not affected.</div></div><button class="btn btn-p" style="font-size:11px" onclick="payMyRent()"><i class="fas fa-credit-card"></i> Pay Now</button></div>';
   }
   return '<div class="pg-h pg-row"><div><h1>Utilities</h1><p>Track your utility usage</p></div>' +
-    '<div style="display:flex;gap:6px"><button class="btn" style="background:#74B9FF;color:#1a1929" onclick="tenantViewUtilityBills()"><i class="fas fa-file-invoice"></i> My Utility Bills</button>' +
-    '<button class="btn btn-p" onclick="generateUtilityBills()"><i class="fas fa-sync"></i> Auto-Generate</button></div></div>' + warn +
+    '<button class="btn" style="background:#74B9FF;color:#1a1929" onclick="tenantViewUtilityBills()"><i class="fas fa-file-invoice"></i> My Utility Bills</button></div>' + warn +
     '<div class="panel"><div style="display:grid;gap:10px">' +
     meterRow('fa-bolt','#FDCB6E','Electricity','This month', myMeter ? myMeter.kwh : '42.5','kWh') +
     meterRow('fa-tint','#74B9FF','Water','This month','3.2','m\u00B3') +
@@ -133,9 +130,14 @@ function tenantMarketplace() {
 }
 
 // ---- LANDLORD ----
+function getCurrentLandlord() {
+  var name = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Tan Sri Ahmad';
+  return LANDLORDS.find(function(l) { return l.n === name; }) || LANDLORDS[0];
+}
+
 function landlordDashboard() {
-  const ll = LANDLORDS[0];
-  return '<div class="pg-h"><h1>Portfolio Dashboard</h1><p>Welcome, ' + ll.n + '</p></div>' +
+  const ll = getCurrentLandlord();
+  return '<div class="pg-h"><h1>Portfolio Dashboard</h1><p>Welcome, ' + escHtml(ll.n) + '</p></div>' +
     '<div class="stats">' +
     stat('fa-building','#FD79A8', ll.props.length, 'Properties','','') +
     stat('fa-door-open','#6C5CE7', ll.units, 'Total Units','','') +
@@ -147,17 +149,26 @@ function landlordDashboard() {
     panel('Recent Payouts', landlordPayoutsHtml()) +
     '</div>';
 }
-function landlordMyProperties() { return '<div class="pg-h"><h1>My Properties</h1><p>Property details & performance</p></div><div class="prop-grid">' + PROPS.filter(p=>['Tsing Hua','Beijing'].includes(p.n)).map(p=>'<div onclick="showPropertyDetail(\''+p.n.replace(/'/g,"\\'")+'\')">' + propCardHtml(p) + '</div>').join('') + '</div>'; }
+function landlordMyProperties() {
+  var ll = getCurrentLandlord();
+  return '<div class="pg-h"><h1>My Properties</h1><p>Property details & performance</p></div><div class="prop-grid">' + PROPS.filter(function(p){return ll.props.includes(p.n);}).map(function(p){return '<div onclick="showPropertyDetail(\''+p.n.replace(/'/g,"\\'")+'\')">' + propCardHtml(p) + '</div>';}).join('') + '</div>';
+}
 function landlordFinancials() {
+  var ll = getCurrentLandlord();
+  var totalRev = 0;
+  ll.props.forEach(function(pName) { var p = PROPS.find(function(x){return x.n===pName;}); if(p) totalRev += p.rev; });
+  var mgmtFee = Math.round(totalRev * 0.2);
+  var netPayout = totalRev - mgmtFee;
   return '<div class="pg-h"><h1>Financials</h1><p>Revenue breakdown & payout history</p></div>' +
     '<div class="stats">' +
-    stat('fa-money-bill-wave','#00B894','RM 29,000','Gross Revenue','','') +
-    stat('fa-percentage','#E17055','RM 5,800','Management Fee (20%)','','') +
-    stat('fa-wallet','#6C5CE7','RM 23,200','Net Payout','','') +
+    stat('fa-money-bill-wave','#00B894','RM ' + totalRev.toLocaleString(),'Gross Revenue','','') +
+    stat('fa-percentage','#E17055','RM ' + mgmtFee.toLocaleString(),'Management Fee (20%)','','') +
+    stat('fa-wallet','#6C5CE7','RM ' + netPayout.toLocaleString(),'Net Payout','','') +
     '</div><div class="panel"><h3 style="margin-bottom:14px">Payout History</h3>' + landlordPayoutsHtml() + '</div>';
 }
 function landlordTenancyOverview() {
-  const myT = TENANTS.filter(t=>t.p.includes('Tsing Hua')||t.p.includes('Beijing'));
+  var ll = getCurrentLandlord();
+  const myT = TENANTS.filter(function(t){ return ll.props.some(function(p){ return t.p.includes(p); }); });
   let rows = '';
   myT.forEach(t => {
     const cls = t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err';
@@ -166,19 +177,84 @@ function landlordTenancyOverview() {
   return '<div class="pg-h"><h1>Tenancy Overview</h1><p>Tenants in your properties</p></div>' +
     '<div class="panel"><table><thead><tr><th>Tenant</th><th>Unit</th><th>Rent</th><th>Status</th><th>Lease End</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
-function landlordMaintenanceLog() { return '<div class="pg-h"><h1>Maintenance Log</h1><p>Maintenance on your properties</p></div><div class="panel">' + ticketListHtml(TICKETS.slice(0,3)) + '</div>'; }
+function landlordMaintenanceLog() {
+  var ll = getCurrentLandlord();
+  var myTickets = TICKETS.filter(function(tk){ return ll.props.some(function(p){ return tk.loc.includes(p); }); });
+  return '<div class="pg-h"><h1>Maintenance Log</h1><p>Maintenance on your properties</p></div><div class="panel">' + (myTickets.length ? ticketListHtml(myTickets) : '<div class="placeholder"><i class="fas fa-check-circle"></i><p>No maintenance tickets for your properties.</p></div>') + '</div>';
+}
 function landlordPayouts() { return landlordFinancials(); }
-function landlordDocuments() { return '<div class="pg-h"><h1>Documents</h1><p>Property documents & contracts</p></div><div class="panel"><div style="display:grid;gap:10px">' + reportListHtml() + '</div></div>'; }
+function landlordDocuments() { return '<div class="pg-h"><h1>Documents</h1><p>Property documents & contracts</p></div><div class="panel"><div style="display:grid;gap:10px">' + landlordReportListHtml() + '</div></div>'; }
 function landlordReports() {
-  return '<div class="pg-h pg-row"><div><h1>Reports</h1><p>View your property performance reports</p></div>' +
-    '<button class="btn" style="background:#FD79A8;color:#fff" onclick="generateOwnerReport(ROLE_CONFIG.landlord.user.name)"><i class="fas fa-file-alt"></i> My Owner Report</button></div>' +
+  var ll = getCurrentLandlord();
+  var totalRev = 0;
+  ll.props.forEach(function(pName) { var p = PROPS.find(function(x){return x.n===pName;}); if(p) totalRev += p.rev; });
+  var avgOcc = ll.occ;
+  // Auto-generated monthly report records (last 6 months retained)
+  var monthlyReports = generateLandlordMonthlyRecords(ll);
+  var monthlyHtml = '';
+  if (monthlyReports.length) {
+    monthlyHtml = '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Monthly Owner Reports</h3>' +
+      '<div style="font-size:10px;color:var(--t3)">Auto-generated &bull; Retained 6 months &bull; Auto-sent to ' + escHtml(ll.n) + '</div></div>' +
+      '<table><thead><tr><th>Month</th><th>Properties</th><th>Net Rental</th><th>Status</th><th></th></tr></thead><tbody>';
+    monthlyReports.forEach(function(mr) {
+      monthlyHtml += '<tr><td style="font-weight:600">' + escHtml(mr.month) + '</td><td>' + escHtml(mr.props) + '</td><td style="font-weight:600;color:var(--ok)">' + escHtml(mr.net) + '</td>' +
+        '<td><span class="bs b-ok">' + escHtml(mr.status) + '</span></td>' +
+        '<td><button class="btn-s" onclick="generateOwnerReport(\'' + ll.n.replace(/'/g, "\\'") + '\')"><i class="fas fa-eye"></i> View</button></td></tr>';
+    });
+    monthlyHtml += '</tbody></table></div>';
+  }
+  return '<div class="pg-h"><h1>Reports</h1><p>View your property performance reports</p></div>' +
     '<div class="stats">' +
-    stat('fa-chart-line','#6C5CE7','RM 82.4K','Monthly Revenue','+12%','up') +
-    stat('fa-percentage','#00CEC9','91%','Avg Occupancy','+2%','up') +
+    stat('fa-chart-line','#6C5CE7','RM ' + (totalRev/1000).toFixed(1) + 'K','Monthly Revenue','+12%','up') +
+    stat('fa-percentage','#00CEC9',avgOcc + '%','Avg Occupancy','+2%','up') +
     stat('fa-clock','#00B894','1.8h','Avg Ticket Resolution','-0.5h','up') +
     stat('fa-star','#FDCB6E','4.6','Tenant NPS','+0.3','up') +
     '</div><div class="panel"><h3 style="margin-bottom:14px">Available Reports</h3>' +
-    reportListHtml() + '</div>';
+    landlordReportListHtml() + '</div>' + monthlyHtml;
+}
+
+// Generate simulated monthly report records for last 6 months
+function generateLandlordMonthlyRecords(ll) {
+  var records = [];
+  var now = new Date();
+  for (var i = 0; i < 6; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var monthStr = monthNames[d.getMonth()] + ' ' + d.getFullYear();
+    var totalRev = 0;
+    ll.props.forEach(function(pName) { var p = PROPS.find(function(x){return x.n===pName;}); if(p) totalRev += p.rev; });
+    var totalExp = 0;
+    ll.props.forEach(function(pName) { var e = PROPERTY_EXPENSES[pName]; if(e) totalExp += Object.values(e).reduce(function(s,v){return s+v;},0); });
+    var net = totalRev - totalExp;
+    records.push({
+      month: monthStr,
+      props: ll.props.join(', '),
+      net: 'RM ' + net.toLocaleString(),
+      status: i === 0 ? 'Current' : 'Sent'
+    });
+  }
+  return records;
+}
+
+// Landlord-specific report list — filters by own properties, includes owner report in the list
+function landlordReportListHtml() {
+  var ll = getCurrentLandlord();
+  var reports = [
+    { n:'Owner Monthly Report', icon:'fa-file-alt', c:'#FD79A8', desc:'Income, expenses & net rental breakdown for your properties', previewFn:'generateOwnerReport(\'' + ll.n.replace(/'/g, "\\'") + '\')', exportFn:'downloadOwnerReportCSV(\'' + ll.n.replace(/'/g, "\\'") + '\')' },
+    { n:'Revenue Report (My Properties)', icon:'fa-chart-line', c:'#6C5CE7', desc:'Revenue breakdown for ' + ll.props.join(', '), exportFn:'exportBills()', previewFn:'previewLandlordRevenueReport()' },
+    { n:'Occupancy Trend (My Properties)', icon:'fa-chart-bar', c:'#00CEC9', desc:'Occupancy analysis for your properties', exportFn:'toast(\"Exporting...\",\"info\")', previewFn:'previewLandlordOccupancyReport()' },
+    { n:'Maintenance Summary', icon:'fa-wrench', c:'#FDCB6E', desc:'Tickets on your properties', exportFn:'exportTickets()', previewFn:'previewMaintenanceReport()' },
+    { n:'Tenant Satisfaction (NPS)', icon:'fa-star', c:'#FD79A8', desc:'Monthly survey results', exportFn:'toast(\"Exporting NPS...\",\"info\")', previewFn:'previewNPSReport()' }
+  ];
+  var html = '';
+  reports.forEach(function(r) {
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:10px">' +
+      '<div style="width:38px;height:38px;border-radius:10px;background:' + r.c + '22;color:' + r.c + ';display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fas ' + r.icon + '"></i></div>' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + r.n + '</div><div style="font-size:10px;color:var(--t3)">' + r.desc + '</div></div>' +
+      '<div style="display:flex;gap:6px"><button class="btn-s" onclick="' + r.previewFn + '" style="background:var(--p);color:#fff"><i class="fas fa-eye"></i> Preview</button>' +
+      '<button class="btn-s" onclick="' + r.exportFn + '"><i class="fas fa-download"></i> Export</button></div></div>';
+  });
+  return html;
 }
 
 // ---- VENDOR ----

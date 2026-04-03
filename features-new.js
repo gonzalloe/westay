@@ -545,6 +545,34 @@ function viewPhoto(filename) {
 
 // ---- CHECK-IN / CHECK-OUT WORKFLOW ----
 
+// Tenant-only: shows only current tenant's check-in/out records
+function showMyCheckInOutList() {
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var myRecords = CHECKINOUT_RECORDS.filter(function(r) { return r.tenant === tenant; });
+
+  var html = '<div style="margin-bottom:14px;font-size:12px;color:var(--t2)"><i class="fas fa-info-circle" style="color:var(--p);margin-right:6px"></i>Your unit check-in and check-out photo records.</div>';
+
+  if (!myRecords.length) {
+    html += '<div class="empty-state"><i class="fas fa-clipboard-check"></i><p>No check-in/check-out records for your unit.</p></div>';
+  } else {
+    html += '<table><thead><tr><th>ID</th><th>Unit</th><th>Type</th><th>Date</th><th>Photos</th><th>Status</th><th></th></tr></thead><tbody>';
+    myRecords.forEach(function(rec) {
+      var cls = rec.status === 'Completed' ? 'b-ok' : 'b-warn';
+      var typeCls = rec.type === 'check-in' ? 'b-info' : 'b-warn';
+      html += '<tr><td style="font-weight:600">' + escHtml(rec.id) + '</td>' +
+        '<td>' + escHtml(rec.unit) + '</td>' +
+        '<td><span class="bs ' + typeCls + '">' + escHtml(rec.type.toUpperCase()) + '</span></td>' +
+        '<td>' + escHtml(rec.date) + '</td>' +
+        '<td>' + (rec.photos ? rec.photos.length : 0) + ' <i class="fas fa-image" style="font-size:10px;color:var(--t3)"></i></td>' +
+        '<td><span class="bs ' + cls + '">' + escHtml(rec.status) + '</span></td>' +
+        '<td><button class="btn-s" onclick="showCheckInOutDetail(\'' + rec.id + '\')"><i class="fas fa-eye"></i></button></td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  openModal('<i class="fas fa-clipboard-check" style="color:#00CEC9"></i> My Check-In / Check-Out Records', html, '<button class="btn btn-ghost" onclick="closeModal()">Close</button>', 'lg');
+}
+
 function showCheckInOutList() {
   var html = '<div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">' +
     '<div style="font-size:12px;color:var(--t2)"><i class="fas fa-info-circle" style="color:var(--p);margin-right:6px"></i>Document unit conditions with photos during tenant check-in and check-out.</div>' +

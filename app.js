@@ -9,6 +9,7 @@ const PAGE_MAP = {
     'dashboard': operatorDashboard,
     'properties': operatorProperties,
     'tenants': operatorTenants,
+    'landlords': operatorLandlords,
     'contracts': operatorContracts,
     'billing': operatorBilling,
     'maintenance': operatorMaintenance,
@@ -344,8 +345,7 @@ function quickAdd() {
       { icon:'fa-wrench', label:'New Request', fn:'addTicketModal()' },
       { icon:'fa-credit-card', label:'Pay Rent', fn:'payMyRent()' },
       { icon:'fa-bolt', label:'Utility Bills', fn:'tenantViewUtilityBills()' },
-      { icon:'fa-sync', label:'Generate Utility Bills', fn:'generateUtilityBills()' },
-      { icon:'fa-clipboard-check', label:'Check-In/Out Photos', fn:'showCheckInOutList()' }
+      { icon:'fa-clipboard-check', label:'My Check-In/Out Photos', fn:'showMyCheckInOutList()' }
     ],
     landlord: [
       { icon:'fa-file-alt', label:'My Owner Report', fn:'generateOwnerReport(ROLE_CONFIG.landlord.user.name)' }

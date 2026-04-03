@@ -68,16 +68,59 @@ function operatorTenants() {
   let rows = '';
   TENANTS.forEach((t, i) => {
     const cls = t.s === 'active' ? 'b-ok' : t.s === 'pending' ? 'b-warn' : 'b-err';
-    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(t.n)) + '</div>' + escHtml(t.n) + '</div></td><td>' + escHtml(t.p) + '</td><td>' + escHtml(t.r) + '</td><td><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></td><td>' + escHtml(t.e) + '</td>' +
+    // Check-in/out evidence
+    const cioRecs = CHECKINOUT_RECORDS.filter(r => r.tenant === t.n);
+    const cioInfo = cioRecs.length ? cioRecs.map(r => '<span class="bs ' + (r.type === 'check-in' ? 'b-info' : 'b-warn') + '" style="font-size:9px;margin-right:2px">' + escHtml(r.type.toUpperCase()) + '</span>').join('') : '<span style="color:var(--t3);font-size:10px">None</span>';
+    // TA contract
+    const ta = CONTRACTS.find(c => c.tenant === t.n);
+    const taInfo = ta ? '<span class="bs b-ok" style="font-size:9px;cursor:pointer" onclick="autoGenerateTA(\'' + t.n.replace(/'/g,"\\'") + '\')">' + escHtml(ta.id) + '</span>' : '<span style="color:var(--t3);font-size:10px">—</span>';
+    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(t.n)) + '</div>' + escHtml(t.n) + '</div></td>' +
+      '<td>' + escHtml(t.p) + '</td>' +
+      '<td>' + escHtml(t.r) + '</td>' +
+      '<td>' + escHtml(t.dep || '—') + '</td>' +
+      '<td>' + cioInfo + '</td>' +
+      '<td>' + taInfo + '</td>' +
+      '<td><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></td>' +
+      '<td>' + escHtml(t.e) + '</td>' +
       '<td><button class="btn-s" onclick="showTenantDetail(\'' + t.n.replace(/'/g,"\\'") + '\')"><i class="fas fa-eye"></i></button></td></tr>';
   });
   return '<div class="pg-h pg-row"><div><h1>Tenants</h1><p>' + TENANTS.length + ' tenants across all properties</p></div>' +
-    '<button class="btn btn-p" onclick="addTenantModal()"><i class="fas fa-user-plus"></i> Add Tenant</button></div>' +
+    '<div style="display:flex;gap:6px"><button class="btn" style="background:#00CEC9;color:#fff" onclick="showCheckInOutList()"><i class="fas fa-clipboard-check"></i> Check-In/Out</button>' +
+    '<button class="btn btn-p" onclick="addTenantModal()"><i class="fas fa-user-plus"></i> Add Tenant</button></div></div>' +
     '<div class="panel"><div class="panel-h"><h3>All Tenants</h3>' +
     '<div style="display:flex;gap:6px"><button class="btn-s" onclick="showFilterModal(\'tenants\')"><i class="fas fa-filter"></i> Filter</button>' +
+    '<button class="btn-s" onclick="previewTenantsReport()"><i class="fas fa-eye"></i> Preview</button>' +
     '<button class="btn-s" onclick="exportTenants()"><i class="fas fa-download"></i> Export</button></div></div>' +
-    '<table><thead><tr><th>Tenant</th><th>Unit</th><th>Rent</th><th>Status</th><th>Lease End</th><th></th></tr></thead>' +
+    '<table><thead><tr><th>Tenant</th><th>Unit</th><th>Rent</th><th>Deposit</th><th>Check-In/Out</th><th>TA</th><th>Status</th><th>Lease End</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table></div>';
+}
+
+function previewTenantsReport() {
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var html = '<div style="max-width:750px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00CEC9);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDC65</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">TENANT SUMMARY REPORT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + ' &bull; ' + TENANTS.length + ' Tenants</div></div>';
+  var active = TENANTS.filter(function(t){return t.s==='active';}).length;
+  var pending = TENANTS.filter(function(t){return t.s==='pending';}).length;
+  var overdue = TENANTS.filter(function(t){return t.s==='overdue';}).length;
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00B894">' + active + '</div><div style="font-size:10px;color:var(--t3)">Active</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#FDCB6E">' + pending + '</div><div style="font-size:10px;color:var(--t3)">Pending</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#E17055">' + overdue + '</div><div style="font-size:10px;color:var(--t3)">Overdue</div></div></div>';
+  html += '<table><thead><tr><th>Name</th><th>Unit</th><th>Rent</th><th>Deposit</th><th>Status</th><th>Lease End</th></tr></thead><tbody>';
+  TENANTS.forEach(function(t) {
+    var cls = t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err';
+    html += '<tr><td style="font-weight:600">' + escHtml(t.n) + '</td><td>' + escHtml(t.p) + '</td><td>' + escHtml(t.r) + '</td><td>' + escHtml(t.dep||'—') + '</td><td><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></td><td>' + escHtml(t.e) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  openModal('<i class="fas fa-users" style="color:#6C5CE7"></i> Tenant Summary Report', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="exportTenants()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
 }
 
 function operatorContracts() {
@@ -146,35 +189,329 @@ function operatorVendors() {
     '<div class="prop-grid">' + cards + '</div>';
 }
 
+// IoT Smart Lock data — grouped by property with full details
+var IOT_LOCKS = [
+  { n:'Main Gate', prop:'Cambridge', s:'Locked', bat:92, lastAccess:'Today 18:30', type:'Gate', firmware:'v3.2.1' },
+  { n:'Block A Door', prop:'Cambridge', s:'Locked', bat:87, lastAccess:'Today 17:45', type:'Door', firmware:'v3.2.1' },
+  { n:'Block C Entry', prop:'Imperial', s:'Unlocked', bat:78, lastAccess:'Today 16:20', type:'Door', firmware:'v3.1.0' },
+  { n:'Main Gate', prop:'Imperial', s:'Locked', bat:45, lastAccess:'Today 15:10', type:'Gate', firmware:'v3.0.8' },
+  { n:'Entrance', prop:'Westlake Villa', s:'Locked', bat:95, lastAccess:'Today 14:55', type:'Gate', firmware:'v3.2.1' },
+  { n:'Pool Gate', prop:'Westlake Villa', s:'Locked', bat:82, lastAccess:'Today 09:30', type:'Gate', firmware:'v3.2.1' },
+  { n:'Block B Entry', prop:'Harvard', s:'Locked', bat:65, lastAccess:'Today 12:40', type:'Door', firmware:'v3.1.0' },
+  { n:'Main Gate', prop:'Harvard', s:'Locked', bat:38, lastAccess:'Today 08:20', type:'Gate', firmware:'v3.0.8' },
+  { n:'Gate A', prop:'Tsing Hua', s:'Locked', bat:88, lastAccess:'Today 17:15', type:'Gate', firmware:'v3.2.1' },
+  { n:'Gate B', prop:'Tsing Hua', s:'Locked', bat:91, lastAccess:'Today 16:50', type:'Gate', firmware:'v3.2.1' },
+  { n:'Block B Main', prop:'Oxford', s:'Locked', bat:71, lastAccess:'Today 13:20', type:'Door', firmware:'v3.1.0' },
+  { n:'Main Gate', prop:'Oxford', s:'Locked', bat:56, lastAccess:'Today 11:05', type:'Gate', firmware:'v3.0.8' },
+  { n:'Block D Entry', prop:'Manchester', s:'Locked', bat:83, lastAccess:'Today 10:30', type:'Door', firmware:'v3.2.1' },
+  { n:'Main Gate', prop:'Manchester', s:'Locked', bat:90, lastAccess:'Today 09:00', type:'Gate', firmware:'v3.2.1' },
+  { n:'Main Gate', prop:'Beijing', s:'Locked', bat:94, lastAccess:'Today 18:10', type:'Gate', firmware:'v3.2.1' },
+  { n:'Block A Door', prop:'Beijing', s:'Locked', bat:76, lastAccess:'Today 15:35', type:'Door', firmware:'v3.1.0' }
+];
+
 function operatorIoT() {
-  const locks = [
-    { n:'Cambridge Main Gate', s:'Locked', bat:'92%', c:'#00B894' },
-    { n:'Imperial Block C', s:'Unlocked', bat:'78%', c:'#FDCB6E' },
-    { n:'Westlake Entrance', s:'Locked', bat:'95%', c:'#00B894' },
-    { n:'Harvard Block B', s:'Locked', bat:'65%', c:'#E17055' },
-    { n:'Tsing Hua Gate A', s:'Locked', bat:'88%', c:'#00B894' },
-    { n:'Oxford Block B', s:'Locked', bat:'71%', c:'#FDCB6E' }
-  ];
-  let cards = '';
-  locks.forEach(l => {
-    const sc = l.s === 'Locked' ? '#00B894' : '#FDCB6E';
-    cards += '<div class="lock-card" onclick="toast(\'Lock: ' + l.n + ' — ' + l.s + '\',\'info\')"><div class="lock-icon" style="color:' + sc + '"><i class="fas fa-' + (l.s === 'Locked' ? 'lock' : 'lock-open') + '"></i></div>' +
-      '<div class="lock-status" style="background:' + sc + '22;color:' + sc + '">' + l.s + '</div>' +
-      '<div class="lock-name">' + l.n + '</div><div class="lock-meta">Battery: ' + l.bat + '</div></div>';
+  var totalLocks = IOT_LOCKS.length;
+  var online = IOT_LOCKS.filter(function(l) { return true; }).length; // All are "online" in demo
+  var lowBat = IOT_LOCKS.filter(function(l) { return l.bat < 50; }).length;
+  var unlocked = IOT_LOCKS.filter(function(l) { return l.s === 'Unlocked'; }).length;
+
+  // Smart lock fingerprint / electric meter summary
+  var disabledLocks = typeof SMART_LOCK_REGISTRY !== 'undefined' ? SMART_LOCK_REGISTRY.filter(function(l) { return l.status.includes('Disabled'); }).length : 0;
+  var discMeters = typeof ELECTRIC_METERS !== 'undefined' ? ELECTRIC_METERS.filter(function(m) { return m.status !== 'Connected'; }).length : 0;
+  var totalMeters = typeof ELECTRIC_METERS !== 'undefined' ? ELECTRIC_METERS.length : 0;
+
+  // Group locks by property
+  var propGroups = {};
+  IOT_LOCKS.forEach(function(lock) {
+    if (!propGroups[lock.prop]) propGroups[lock.prop] = [];
+    propGroups[lock.prop].push(lock);
   });
+
+  var lockHtml = '';
+  Object.keys(propGroups).forEach(function(propName) {
+    var locks = propGroups[propName];
+    var prop = PROPS.find(function(p) { return p.n === propName; });
+    var propColor = prop ? prop.c : '#6C5CE7';
+    var propIcon = prop ? prop.icon : 'fa-building';
+    var lockedCount = locks.filter(function(l) { return l.s === 'Locked'; }).length;
+    var lowBatCount = locks.filter(function(l) { return l.bat < 50; }).length;
+
+    lockHtml += '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:' + propColor + '11;border-radius:8px;border-left:3px solid ' + propColor + '">' +
+      '<i class="fas ' + propIcon + '" style="color:' + propColor + ';font-size:12px"></i>' +
+      '<div style="flex:1;font-size:12px;font-weight:600">' + escHtml(propName) + '</div>' +
+      '<span style="font-size:10px;color:var(--t3)">' + locks.length + ' locks &bull; ' + lockedCount + ' locked</span>' +
+      (lowBatCount ? '<span class="bs b-warn" style="font-size:9px">' + lowBatCount + ' low bat</span>' : '') +
+      '</div>';
+
+    lockHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">';
+    locks.forEach(function(l) {
+      var sc = l.s === 'Locked' ? '#00B894' : '#FDCB6E';
+      var batColor = l.bat >= 80 ? '#00B894' : l.bat >= 50 ? '#FDCB6E' : '#E17055';
+      var batIcon = l.bat >= 80 ? 'fa-battery-full' : l.bat >= 50 ? 'fa-battery-half' : 'fa-battery-quarter';
+      lockHtml += '<div class="lock-card" style="cursor:pointer;padding:14px" onclick="showLockDetail(\'' + escHtml(l.prop) + ' — ' + escHtml(l.n) + '\')">' +
+        '<div class="lock-icon" style="color:' + sc + ';font-size:20px"><i class="fas fa-' + (l.s === 'Locked' ? 'lock' : 'lock-open') + '"></i></div>' +
+        '<div class="lock-status" style="background:' + sc + '22;color:' + sc + ';font-size:10px;padding:2px 8px">' + l.s + '</div>' +
+        '<div class="lock-name" style="font-size:11px">' + escHtml(l.n) + '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px">' +
+        '<i class="fas ' + batIcon + '" style="font-size:10px;color:' + batColor + '"></i>' +
+        '<span style="font-size:10px;color:' + batColor + ';font-weight:600">' + l.bat + '%</span></div>' +
+        '<div class="lock-meta" style="font-size:9px;margin-top:2px">' + escHtml(l.lastAccess) + '</div></div>';
+    });
+    lockHtml += '</div></div>';
+  });
+
   return '<div class="pg-h"><h1>IoT & Smart Locks</h1><p>Monitor all connected devices</p></div>' +
     '<div class="stats">' +
-    stat('fa-lock','#00B894','24','Devices Online','','up') +
-    stat('fa-battery-half','#FDCB6E','3','Low Battery','','dn') +
-    stat('fa-door-open','#6C5CE7','156','Access Events Today','','up') +
-    stat('fa-bolt','#E17055','2.4 kWh','Avg Energy/Room','','up') +
+    cStat('fa-lock','#00B894', totalLocks, 'Total Locks','','up','showIoTDeviceList(\'all\')') +
+    cStat('fa-battery-quarter','#FDCB6E', lowBat, 'Low Battery','','dn','showIoTDeviceList(\'low-bat\')') +
+    cStat('fa-lock-open','#E17055', unlocked, 'Unlocked','','','showIoTDeviceList(\'unlocked\')') +
+    cStat('fa-fingerprint','#FD79A8', disabledLocks, 'Disabled FP','','','showSmartLockManager()') +
+    cStat('fa-bolt','#6C5CE7', discMeters + '/' + totalMeters, 'Disc. Meters','','','showElectricMeterManager()') +
     '</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:16px">' +
     '<button class="btn" style="background:#FD79A8;color:#fff" onclick="showSmartLockManager()"><i class="fas fa-fingerprint"></i> Fingerprint Manager</button>' +
-    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button>' +
-    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showCheckInOutList()"><i class="fas fa-clipboard-check"></i> Check-In/Out</button></div>' +
-    '<div class="panel"><h3 style="margin-bottom:14px">Smart Locks</h3>' +
-    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">' + cards + '</div></div>';
+    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button></div>' +
+    '<div class="panel"><div class="panel-h"><h3>Smart Locks by Property</h3>' +
+    '<div style="font-size:10px;color:var(--t3)">' + totalLocks + ' locks across ' + Object.keys(propGroups).length + ' properties</div></div>' +
+    lockHtml + '</div>';
+}
+
+function showIoTDeviceList(filter) {
+  var filtered;
+  var title;
+  if (filter === 'low-bat') {
+    filtered = IOT_LOCKS.filter(function(l) { return l.bat < 50; });
+    title = 'Low Battery Locks (' + filtered.length + ')';
+  } else if (filter === 'unlocked') {
+    filtered = IOT_LOCKS.filter(function(l) { return l.s === 'Unlocked'; });
+    title = 'Unlocked Devices (' + filtered.length + ')';
+  } else {
+    filtered = IOT_LOCKS;
+    title = 'All Locks (' + filtered.length + ')';
+  }
+
+  var html = '<table><thead><tr><th>Lock</th><th>Property</th><th>Type</th><th>Status</th><th>Battery</th><th>Last Access</th><th>Firmware</th></tr></thead><tbody>';
+  filtered.forEach(function(l) {
+    var sc = l.s === 'Locked' ? 'b-ok' : 'b-warn';
+    var batColor = l.bat >= 80 ? '#00B894' : l.bat >= 50 ? '#FDCB6E' : '#E17055';
+    html += '<tr><td style="font-weight:600">' + escHtml(l.n) + '</td><td>' + escHtml(l.prop) + '</td><td>' + escHtml(l.type) + '</td>' +
+      '<td><span class="bs ' + sc + '">' + escHtml(l.s) + '</span></td>' +
+      '<td><span style="color:' + batColor + ';font-weight:600">' + l.bat + '%</span></td>' +
+      '<td>' + escHtml(l.lastAccess) + '</td><td style="font-family:monospace;font-size:10px">' + escHtml(l.firmware) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+
+  openModal('<i class="fas fa-microchip" style="color:#6C5CE7"></i> ' + title, html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>', 'lg');
+}
+
+function showLockDetail(lockLabel) {
+  var parts = lockLabel.split(' — ');
+  var propName = parts[0], lockName = parts[1] || '';
+  var lock = IOT_LOCKS.find(function(l) { return l.prop === propName && l.n === lockName; });
+  if (!lock) { toast('Lock not found', 'error'); return; }
+
+  var sc = lock.s === 'Locked' ? '#00B894' : '#FDCB6E';
+  var batColor = lock.bat >= 80 ? '#00B894' : lock.bat >= 50 ? '#FDCB6E' : '#E17055';
+
+  var html = '<div style="text-align:center;margin-bottom:16px">' +
+    '<div style="font-size:48px;color:' + sc + ';margin-bottom:8px"><i class="fas fa-' + (lock.s === 'Locked' ? 'lock' : 'lock-open') + '"></i></div>' +
+    '<div style="display:inline-block;padding:4px 16px;border-radius:20px;background:' + sc + '22;color:' + sc + ';font-weight:600;font-size:13px">' + lock.s + '</div></div>';
+
+  html += '<div class="dep-card">' +
+    depRow('Lock Name', lock.n) +
+    depRow('Property', lock.prop) +
+    depRow('Type', lock.type) +
+    depRowHtml('Battery', '<span style="color:' + batColor + ';font-weight:700">' + lock.bat + '%</span> <i class="fas ' + (lock.bat >= 80 ? 'fa-battery-full' : lock.bat >= 50 ? 'fa-battery-half' : 'fa-battery-quarter') + '" style="color:' + batColor + '"></i>') +
+    depRow('Last Access', lock.lastAccess) +
+    depRow('Firmware', lock.firmware) +
+    '</div>';
+
+  // Simulated access log
+  html += '<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-history" style="color:var(--p);margin-right:6px"></i>Recent Access Log</div>' +
+    '<div class="timeline-item"><div class="tl-time">' + escHtml(lock.lastAccess) + '</div><div class="tl-text">Door ' + (lock.s === 'Locked' ? 'locked' : 'unlocked') + ' (auto)</div></div>' +
+    '<div class="timeline-item"><div class="tl-time">Today 08:15</div><div class="tl-text">Door unlocked (fingerprint)</div></div>' +
+    '<div class="timeline-item"><div class="tl-time">Yesterday 23:00</div><div class="tl-text">Door locked (auto)</div></div>' +
+    '<div class="timeline-item"><div class="tl-time">Yesterday 18:20</div><div class="tl-text">Door unlocked (app)</div></div></div>';
+
+  openModal('<i class="fas fa-lock" style="color:' + sc + '"></i> ' + escHtml(lock.prop) + ' — ' + escHtml(lock.n), html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    (lock.s === 'Locked' ? '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="toggleIoTLock(\'' + escHtml(lock.prop) + '\',\'' + escHtml(lock.n) + '\',\'unlock\')"><i class="fas fa-lock-open"></i> Unlock</button>' :
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="toggleIoTLock(\'' + escHtml(lock.prop) + '\',\'' + escHtml(lock.n) + '\',\'lock\')"><i class="fas fa-lock"></i> Lock</button>'), 'sm');
+}
+
+function toggleIoTLock(propName, lockName, action) {
+  var lock = IOT_LOCKS.find(function(l) { return l.prop === propName && l.n === lockName; });
+  if (!lock) return;
+  var newState = action === 'lock' ? 'Locked' : 'Unlocked';
+  confirmDialog((action === 'lock' ? 'Lock' : 'Unlock') + ' Device?', (action === 'lock' ? 'Lock' : 'Unlock') + ' ' + escHtml(propName) + ' — ' + escHtml(lockName) + '?', function() {
+    lock.s = newState;
+    toast(escHtml(lockName) + ' at ' + escHtml(propName) + ' is now ' + newState, 'success');
+    pushNotif('fa-lock', action === 'lock' ? '#00B894' : '#FDCB6E', 'Lock ' + newState, escHtml(propName) + ' — ' + escHtml(lockName));
+    closeModal();
+    if (currentPage === 'iot') navigateTo('iot');
+  }, action === 'lock' ? 'success' : 'warning');
+}
+
+function operatorLandlords() {
+  let rows = '';
+  LANDLORDS.forEach((ll, i) => {
+    // Compute financials
+    let totalRev = 0, totalExp = 0;
+    ll.props.forEach(pName => {
+      const p = PROPS.find(x => x.n === pName);
+      if (p) totalRev += p.rev;
+      const e = PROPERTY_EXPENSES[pName];
+      if (e) totalExp += Object.values(e).reduce((s, v) => s + v, 0);
+    });
+    const netPayout = totalRev - totalExp;
+    const mgmtFee = Math.round(totalRev * 0.2);
+
+    // Count tenants in landlord's properties
+    const llTenants = TENANTS.filter(t => ll.props.some(p => t.p.includes(p)));
+    const activeTenants = llTenants.filter(t => t.s === 'active').length;
+
+    // Expiring contracts
+    const now = new Date();
+    const expiringC = CONTRACTS.filter(c => {
+      if (!c.end) return false;
+      const pName = c.prop.split(' ')[0];
+      if (!ll.props.includes(pName)) return false;
+      const diff = (new Date(c.end) - now) / (1000*60*60*24);
+      return diff > 0 && diff <= 30;
+    }).length;
+
+    rows += '<tr>' +
+      '<td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(ll.n)) + '</div><div><div style="font-weight:600">' + escHtml(ll.n) + '</div><div style="font-size:9px;color:var(--t3)">' + ll.props.length + ' properties</div></div></div></td>' +
+      '<td>' + ll.props.map(p => '<span class="bs b-p" style="font-size:9px;margin:1px">' + escHtml(p) + '</span>').join(' ') + '</td>' +
+      '<td style="text-align:center">' + ll.units + '</td>' +
+      '<td style="text-align:center"><span style="font-weight:600;color:' + (ll.occ >= 90 ? 'var(--ok)' : ll.occ >= 80 ? 'var(--warn)' : 'var(--err)') + '">' + ll.occ + '%</span></td>' +
+      '<td style="font-weight:600;color:var(--ok)">RM ' + totalRev.toLocaleString() + '</td>' +
+      '<td style="color:var(--err)">RM ' + totalExp.toLocaleString() + '</td>' +
+      '<td style="font-weight:700;color:var(--p)">RM ' + netPayout.toLocaleString() + '</td>' +
+      '<td style="text-align:center">' + activeTenants + '/' + llTenants.length + '</td>' +
+      '<td>' + (expiringC ? '<span class="bs b-warn">' + expiringC + ' expiring</span>' : '<span class="bs b-ok">OK</span>') + '</td>' +
+      '<td><div style="display:flex;gap:4px">' +
+        '<button class="btn-s" onclick="generateOwnerReport(\'' + ll.n.replace(/'/g,"\\'") + '\')" title="Owner Report"><i class="fas fa-file-alt"></i></button>' +
+        '<button class="btn-s" onclick="showLandlordDetail(\'' + ll.n.replace(/'/g,"\\'") + '\')" title="Details"><i class="fas fa-eye"></i></button></div></td></tr>';
+  });
+
+  // Summary stats
+  const totalLLRevenue = LANDLORDS.reduce((s, ll) => {
+    let rev = 0; ll.props.forEach(pName => { const p = PROPS.find(x => x.n === pName); if (p) rev += p.rev; }); return s + rev;
+  }, 0);
+  const totalMgmtFee = Math.round(totalLLRevenue * 0.2);
+  const totalUnits = LANDLORDS.reduce((s, ll) => s + ll.units, 0);
+  const avgOcc = Math.round(LANDLORDS.reduce((s, ll) => s + ll.occ, 0) / LANDLORDS.length);
+
+  return '<div class="pg-h pg-row"><div><h1>Landlords</h1><p>' + LANDLORDS.length + ' property owners</p></div>' +
+    '<div style="display:flex;gap:6px"><button class="btn" style="background:#FD79A8;color:#fff" onclick="generateOwnerReport()"><i class="fas fa-file-alt"></i> Owner Report</button>' +
+    '<button class="btn-s" onclick="previewLandlordsReport()"><i class="fas fa-eye"></i> Preview</button>' +
+    '<button class="btn-s" onclick="exportLandlords()"><i class="fas fa-download"></i> Export</button></div></div>' +
+    '<div class="stats">' +
+    stat('fa-users','#FD79A8', LANDLORDS.length, 'Landlords','','') +
+    stat('fa-building','#6C5CE7', totalUnits, 'Total Units','','') +
+    stat('fa-chart-pie','#00CEC9', avgOcc + '%', 'Avg Occupancy','','up') +
+    stat('fa-money-bill-wave','#00B894', 'RM ' + (totalLLRevenue/1000).toFixed(1) + 'K', 'Gross Revenue','','up') +
+    stat('fa-percentage','#FDCB6E', 'RM ' + (totalMgmtFee/1000).toFixed(1) + 'K', 'Mgmt Fee (20%)','','') +
+    '</div>' +
+    '<div class="panel"><div class="panel-h"><h3>All Landlords</h3></div>' +
+    '<table><thead><tr><th>Landlord</th><th>Properties</th><th>Units</th><th>Occ</th><th>Revenue</th><th>Expenses</th><th>Net Payout</th><th>Tenants</th><th>Alerts</th><th></th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table></div>';
+}
+
+function showLandlordDetail(llName) {
+  var ll = LANDLORDS.find(function(l) { return l.n === llName; });
+  if (!ll) { toast('Landlord not found', 'error'); return; }
+
+  var totalRev = 0, totalExp = 0;
+  ll.props.forEach(function(pName) {
+    var p = PROPS.find(function(x) { return x.n === pName; });
+    if (p) totalRev += p.rev;
+    var e = PROPERTY_EXPENSES[pName];
+    if (e) totalExp += Object.values(e).reduce(function(s, v) { return s + v; }, 0);
+  });
+
+  var llTenants = TENANTS.filter(function(t) { return ll.props.some(function(p) { return t.p.includes(p); }); });
+
+  var html = '<div class="dep-card">' +
+    depRow('Name', ll.n) +
+    depRow('Properties', ll.props.join(', ')) +
+    depRow('Total Units', ll.units) +
+    depRow('Occupancy', ll.occ + '%') +
+    depRow('Monthly Revenue', ll.rev) +
+    depRow('Est. Payout', ll.payout) +
+    '</div>';
+
+  // Property breakdown
+  html += '<div style="margin:14px 0"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-building" style="color:var(--p);margin-right:6px"></i>Property Breakdown</div>';
+  html += '<table><thead><tr><th>Property</th><th>Rooms</th><th>Occ</th><th>Revenue</th><th>Expenses</th><th>Net</th></tr></thead><tbody>';
+  ll.props.forEach(function(pName) {
+    var p = PROPS.find(function(x) { return x.n === pName; });
+    if (!p) return;
+    var exp = PROPERTY_EXPENSES[pName] ? Object.values(PROPERTY_EXPENSES[pName]).reduce(function(s, v) { return s + v; }, 0) : 0;
+    var net = p.rev - exp;
+    html += '<tr><td style="font-weight:600">' + escHtml(pName) + '</td><td>' + p.r + '</td><td>' + p.o + '%</td><td style="color:var(--ok)">RM ' + p.rev.toLocaleString() + '</td><td style="color:var(--err)">RM ' + exp.toLocaleString() + '</td><td style="font-weight:700;color:' + (net >= 0 ? 'var(--ok)' : 'var(--err)') + '">RM ' + net.toLocaleString() + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Tenants in landlord's properties
+  if (llTenants.length) {
+    html += '<div style="margin:14px 0"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-users" style="color:#00CEC9;margin-right:6px"></i>Tenants (' + llTenants.length + ')</div>';
+    html += '<table><thead><tr><th>Tenant</th><th>Unit</th><th>Rent</th><th>Status</th></tr></thead><tbody>';
+    llTenants.forEach(function(t) {
+      var cls = t.s === 'active' ? 'b-ok' : t.s === 'pending' ? 'b-warn' : 'b-err';
+      html += '<tr><td>' + escHtml(t.n) + '</td><td>' + escHtml(t.p) + '</td><td>' + escHtml(t.r) + '</td><td><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  openModal('<i class="fas fa-user-tie" style="color:#FD79A8"></i> ' + escHtml(ll.n), html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="closeModal();generateOwnerReport(\'' + ll.n.replace(/'/g, "\\'") + '\')"><i class="fas fa-file-alt"></i> Owner Report</button>', 'lg');
+}
+
+function previewLandlordsReport() {
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var html = '<div style="max-width:750px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#FD79A8,#6C5CE7);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83C\uDFE0</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">LANDLORD PORTFOLIO SUMMARY</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + ' &bull; ' + LANDLORDS.length + ' Owners</div></div>';
+
+  html += '<table><thead><tr><th>Landlord</th><th>Properties</th><th>Units</th><th>Occ</th><th>Revenue</th><th>Expenses</th><th>Net Payout</th></tr></thead><tbody>';
+  var grandRev = 0, grandExp = 0;
+  LANDLORDS.forEach(function(ll) {
+    var rev = 0, exp = 0;
+    ll.props.forEach(function(pName) {
+      var p = PROPS.find(function(x) { return x.n === pName; }); if (p) rev += p.rev;
+      var e = PROPERTY_EXPENSES[pName]; if (e) exp += Object.values(e).reduce(function(s, v) { return s + v; }, 0);
+    });
+    grandRev += rev; grandExp += exp;
+    html += '<tr><td style="font-weight:600">' + escHtml(ll.n) + '</td><td>' + ll.props.join(', ') + '</td><td>' + ll.units + '</td><td>' + ll.occ + '%</td><td style="color:var(--ok)">RM ' + rev.toLocaleString() + '</td><td style="color:var(--err)">RM ' + exp.toLocaleString() + '</td><td style="font-weight:700;color:var(--p)">RM ' + (rev - exp).toLocaleString() + '</td></tr>';
+  });
+  html += '<tr style="background:var(--bg2)"><td colspan="4" style="font-weight:700;text-align:right">Total</td><td style="font-weight:700;color:var(--ok)">RM ' + grandRev.toLocaleString() + '</td><td style="font-weight:700;color:var(--err)">RM ' + grandExp.toLocaleString() + '</td><td style="font-weight:800;color:var(--p)">RM ' + (grandRev - grandExp).toLocaleString() + '</td></tr>';
+  html += '</tbody></table></div>';
+
+  openModal('<i class="fas fa-users" style="color:#FD79A8"></i> Landlord Portfolio Summary', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="exportLandlords()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+function exportLandlords() {
+  var headers = ['Landlord', 'Properties', 'Units', 'Occupancy', 'Revenue (RM)', 'Expenses (RM)', 'Net Payout (RM)'];
+  var rows = LANDLORDS.map(function(ll) {
+    var rev = 0, exp = 0;
+    ll.props.forEach(function(pName) {
+      var p = PROPS.find(function(x) { return x.n === pName; }); if (p) rev += p.rev;
+      var e = PROPERTY_EXPENSES[pName]; if (e) exp += Object.values(e).reduce(function(s, v) { return s + v; }, 0);
+    });
+    return [ll.n, ll.props.join('; '), ll.units, ll.occ + '%', rev, exp, rev - exp];
+  });
+  exportCSV(headers, rows, 'westay-landlords-' + new Date().toISOString().slice(0, 7) + '.csv');
 }
 
 function operatorLeads() {

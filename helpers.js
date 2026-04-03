@@ -9,6 +9,14 @@ function stat(icon, color, val, label, change, dir) {
     '</div><div class="val">' + escHtml(String(val)) + '</div><div class="lbl">' + escHtml(label) + '</div></div>';
 }
 
+// Clickable stat card — wraps stat content in an onclick div
+function cStat(icon, color, val, label, change, dir, onclick) {
+  const chCls = dir === 'up' ? 'ch up' : dir === 'dn' ? 'ch dn' : 'ch';
+  return '<div class="stat" style="cursor:pointer" onclick="' + onclick + '"><div class="top"><div class="ic" style="background:' + color + '22;color:' + color + '"><i class="fas ' + icon + '"></i></div>' +
+    (change ? '<span class="' + chCls + '">' + escHtml(change) + '</span>' : '') +
+    '</div><div class="val">' + escHtml(String(val)) + '</div><div class="lbl">' + escHtml(label) + '</div></div>';
+}
+
 function panel(title, content, extraClass) {
   return '<div class="panel' + (extraClass ? ' ' + extraClass : '') + '"><div class="panel-h"><h3>' + escHtml(title) + '</h3></div>' + content + '</div>';
 }
@@ -389,6 +397,64 @@ function printReportPreview() {
   w.document.write('<html><head><title>Report Preview</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#1a1929;color:#e2e0f0;padding:30px;max-width:750px;margin:0 auto}*{box-sizing:border-box}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #2D2B4A;font-size:11px}</style></head><body>' + modalBody.innerHTML + '</body></html>');
   w.document.close();
   setTimeout(function() { w.print(); }, 500);
+}
+
+// Landlord-filtered Revenue Report
+function previewLandlordRevenueReport() {
+  var ll = typeof getCurrentLandlord === 'function' ? getCurrentLandlord() : LANDLORDS[0];
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var myProps = PROPS.filter(function(p) { return ll.props.includes(p.n); });
+  var totalRev = myProps.reduce(function(s,p){return s+p.rev;},0);
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00CEC9);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDCCA</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">REVENUE REPORT — ' + escHtml(ll.n) + '</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + ' &bull; ' + myProps.length + ' Properties</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00B894">RM ' + totalRev.toLocaleString() + '</div><div style="font-size:10px;color:var(--t3)">Total Revenue</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#6C5CE7">' + myProps.length + '</div><div style="font-size:10px;color:var(--t3)">Properties</div></div></div>';
+  html += '<table><thead><tr><th>Property</th><th>Rooms</th><th>Occupancy</th><th style="text-align:right">Revenue (RM)</th></tr></thead><tbody>';
+  myProps.forEach(function(p) {
+    html += '<tr><td style="font-weight:600">' + escHtml(p.n) + '</td><td>' + p.r + '</td><td>' + p.o + '%</td><td style="text-align:right;font-weight:600">RM ' + p.rev.toLocaleString() + '</td></tr>';
+  });
+  html += '<tr style="background:var(--bg2)"><td colspan="3" style="font-weight:700;text-align:right">Total</td><td style="text-align:right;font-size:15px;font-weight:800;color:var(--ok)">RM ' + totalRev.toLocaleString() + '</td></tr></tbody></table>';
+  html += '</div>';
+  openModal('<i class="fas fa-chart-line" style="color:#6C5CE7"></i> Revenue Report — ' + escHtml(ll.n), html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+// Landlord-filtered Occupancy Report
+function previewLandlordOccupancyReport() {
+  var ll = typeof getCurrentLandlord === 'function' ? getCurrentLandlord() : LANDLORDS[0];
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var myProps = PROPS.filter(function(p) { return ll.props.includes(p.n); });
+  var totalRooms = myProps.reduce(function(s,p){return s+p.r;},0);
+  var totalOcc = myProps.reduce(function(s,p){return s+Math.round(p.r*p.o/100);},0);
+  var avgOcc = totalRooms > 0 ? Math.round(totalOcc/totalRooms*100) : 0;
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#00CEC9,#6C5CE7);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83C\uDFE2</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">OCCUPANCY REPORT — ' + escHtml(ll.n) + '</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + '</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00CEC9">' + avgOcc + '%</div><div style="font-size:10px;color:var(--t3)">Avg Occupancy</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#6C5CE7">' + totalOcc + '/' + totalRooms + '</div><div style="font-size:10px;color:var(--t3)">Occupied/Total</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#FD79A8">' + (totalRooms-totalOcc) + '</div><div style="font-size:10px;color:var(--t3)">Vacant</div></div></div>';
+  html += '<table><thead><tr><th>Property</th><th>Rooms</th><th>Occupied</th><th>Vacant</th><th>Rate</th></tr></thead><tbody>';
+  myProps.forEach(function(p) {
+    var occ=Math.round(p.r*p.o/100), vac=p.r-occ;
+    html += '<tr><td style="font-weight:600">' + escHtml(p.n) + '</td><td>' + p.r + '</td><td>' + occ + '</td><td>' + vac + '</td>' +
+      '<td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden"><div style="width:'+p.o+'%;height:100%;background:'+p.c+';border-radius:3px"></div></div><span style="font-weight:600;font-size:11px">' + p.o + '%</span></div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  openModal('<i class="fas fa-chart-bar" style="color:#00CEC9"></i> Occupancy Report — ' + escHtml(ll.n), html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
 }
 
 function settingsGeneral() {
