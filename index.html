@@ -73,9 +73,11 @@
 
 <!-- ============ SIDEBAR ============ -->
 <aside class="sidebar" id="sidebar"></aside>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileMenu()"></div>
 
 <!-- ============ HEADER ============ -->
 <header class="header">
+  <div class="hamburger" id="hamburgerBtn" onclick="openMobileMenu()"><i class="fas fa-bars"></i></div>
   <div class="h-search">
     <i class="fas fa-search"></i>
     <input type="text" placeholder="Search tenants, properties, invoices... (Ctrl+K)" oninput="doSearch(this.value)" onfocus="if(this.value)doSearch(this.value)" id="globalSearch">

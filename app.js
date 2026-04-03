@@ -315,6 +315,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeModal();
     closeSidePanel();
+    closeMobileMenu();
     document.getElementById('searchDropdown')?.classList.remove('open');
     document.getElementById('notifPanel')?.classList.remove('open');
     document.getElementById('aiBox')?.classList.remove('open');
@@ -419,3 +420,19 @@ function quickAdd() {
   send.addEventListener('click', handleSend);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSend(); });
 })();
+
+// ---- MOBILE HAMBURGER MENU ----
+function openMobileMenu() {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebarOverlay').classList.add('open');
+}
+function closeMobileMenu() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+// Auto-close mobile menu when navigating
+const origNavigateTo = navigateTo;
+navigateTo = function(pageId) {
+  closeMobileMenu();
+  origNavigateTo(pageId);
+};
