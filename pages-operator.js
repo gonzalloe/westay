@@ -220,46 +220,6 @@ function operatorIoT() {
   var discMeters = typeof ELECTRIC_METERS !== 'undefined' ? ELECTRIC_METERS.filter(function(m) { return m.status !== 'Connected'; }).length : 0;
   var totalMeters = typeof ELECTRIC_METERS !== 'undefined' ? ELECTRIC_METERS.length : 0;
 
-  // Group locks by property
-  var propGroups = {};
-  IOT_LOCKS.forEach(function(lock) {
-    if (!propGroups[lock.prop]) propGroups[lock.prop] = [];
-    propGroups[lock.prop].push(lock);
-  });
-
-  var lockHtml = '';
-  Object.keys(propGroups).forEach(function(propName) {
-    var locks = propGroups[propName];
-    var prop = PROPS.find(function(p) { return p.n === propName; });
-    var propColor = prop ? prop.c : '#6C5CE7';
-    var propIcon = prop ? prop.icon : 'fa-building';
-    var lockedCount = locks.filter(function(l) { return l.s === 'Locked'; }).length;
-    var lowBatCount = locks.filter(function(l) { return l.bat < 50; }).length;
-
-    lockHtml += '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:' + propColor + '11;border-radius:8px;border-left:3px solid ' + propColor + '">' +
-      '<i class="fas ' + propIcon + '" style="color:' + propColor + ';font-size:12px"></i>' +
-      '<div style="flex:1;font-size:12px;font-weight:600">' + escHtml(propName) + '</div>' +
-      '<span style="font-size:10px;color:var(--t3)">' + locks.length + ' locks &bull; ' + lockedCount + ' locked</span>' +
-      (lowBatCount ? '<span class="bs b-warn" style="font-size:9px">' + lowBatCount + ' low bat</span>' : '') +
-      '</div>';
-
-    lockHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">';
-    locks.forEach(function(l) {
-      var sc = l.s === 'Locked' ? '#00B894' : '#FDCB6E';
-      var batColor = l.bat >= 80 ? '#00B894' : l.bat >= 50 ? '#FDCB6E' : '#E17055';
-      var batIcon = l.bat >= 80 ? 'fa-battery-full' : l.bat >= 50 ? 'fa-battery-half' : 'fa-battery-quarter';
-      lockHtml += '<div class="lock-card" style="cursor:pointer;padding:14px" onclick="showLockDetail(\'' + escHtml(l.prop) + ' — ' + escHtml(l.n) + '\')">' +
-        '<div class="lock-icon" style="color:' + sc + ';font-size:20px"><i class="fas fa-' + (l.s === 'Locked' ? 'lock' : 'lock-open') + '"></i></div>' +
-        '<div class="lock-status" style="background:' + sc + '22;color:' + sc + ';font-size:10px;padding:2px 8px">' + l.s + '</div>' +
-        '<div class="lock-name" style="font-size:11px">' + escHtml(l.n) + '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px">' +
-        '<i class="fas ' + batIcon + '" style="font-size:10px;color:' + batColor + '"></i>' +
-        '<span style="font-size:10px;color:' + batColor + ';font-weight:600">' + l.bat + '%</span></div>' +
-        '<div class="lock-meta" style="font-size:9px;margin-top:2px">' + escHtml(l.lastAccess) + '</div></div>';
-    });
-    lockHtml += '</div></div>';
-  });
-
   return '<div class="pg-h"><h1>IoT & Smart Locks</h1><p>Monitor all connected devices</p></div>' +
     '<div class="stats">' +
     cStat('fa-lock','#00B894', totalLocks, 'Total Locks','','up','showIoTDeviceList(\'all\')') +
@@ -270,10 +230,7 @@ function operatorIoT() {
     '</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:16px">' +
     '<button class="btn" style="background:#FD79A8;color:#fff" onclick="showSmartLockManager()"><i class="fas fa-fingerprint"></i> Fingerprint Manager</button>' +
-    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button></div>' +
-    '<div class="panel"><div class="panel-h"><h3>Smart Locks by Property</h3>' +
-    '<div style="font-size:10px;color:var(--t3)">' + totalLocks + ' locks across ' + Object.keys(propGroups).length + ' properties</div></div>' +
-    lockHtml + '</div>';
+    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button></div>';
 }
 
 function showIoTDeviceList(filter) {

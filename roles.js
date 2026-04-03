@@ -75,7 +75,6 @@ const ROLE_CONFIG = {
         { id:'payouts', icon:'fa-money-bill-wave', label:'Payouts', badge:null }
       ]},
       { section: 'OTHER', items: [
-        { id:'documents', icon:'fa-folder-open', label:'Documents', badge:null },
         { id:'reports', icon:'fa-chart-bar', label:'Reports', badge:null }
       ]}
     ]

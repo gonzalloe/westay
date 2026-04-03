@@ -459,6 +459,43 @@ function tenantViewUtilityBills() {
   openModal('<i class="fas fa-bolt" style="color:#74B9FF"></i> My Utility Bills', html, '<button class="btn btn-ghost" onclick="closeModal()">Close</button>', 'sm');
 }
 
+function showUtilityBillDetail(billId) {
+  var bill = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.find(function(b) { return b.id === billId; }) : null;
+  if (!bill) { toast('Bill not found', 'error'); return; }
+
+  var cls = bill.status === 'Paid' ? 'b-ok' : 'b-warn';
+  var html = '<div style="text-align:center;margin-bottom:16px">' +
+    '<div style="font-size:32px;font-weight:800;color:var(--p)">RM ' + bill.total.toFixed(2) + '</div>' +
+    '<span class="bs ' + cls + '">' + escHtml(bill.status) + '</span></div>';
+
+  html += '<div class="dep-card">' +
+    depRow('Bill ID', bill.id) +
+    depRow('Tenant', bill.tenant) +
+    depRow('Period', bill.period) +
+    depRow('Total', 'RM ' + bill.total.toFixed(2)) +
+    '</div>';
+
+  // Item breakdown
+  html += '<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-list" style="color:var(--p);margin-right:6px"></i>Breakdown</div>';
+  html += '<div style="display:grid;gap:8px">';
+  bill.items.forEach(function(item) {
+    var ic = item.type === 'Electricity' ? 'fa-bolt' : item.type === 'Water' ? 'fa-tint' : item.type === 'Internet' ? 'fa-wifi' : 'fa-shower';
+    var col = item.type === 'Electricity' ? '#FDCB6E' : item.type === 'Water' ? '#74B9FF' : item.type === 'Internet' ? '#6C5CE7' : '#A29BFE';
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px">' +
+      '<div style="width:34px;height:34px;border-radius:9px;background:' + col + '22;color:' + col + ';display:flex;align-items:center;justify-content:center;font-size:14px"><i class="fas ' + ic + '"></i></div>' +
+      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + escHtml(item.type) + '</div>' +
+      '<div style="font-size:10px;color:var(--t3)">' + (item.usage || '') + '</div></div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--p)">RM ' + item.amount.toFixed(2) + '</div></div>';
+  });
+  html += '</div></div>';
+
+  var footer = '<button class="btn btn-ghost" onclick="closeModal()">Close</button>';
+  if (bill.status !== 'Paid') {
+    footer += '<button class="btn btn-p" onclick="closeModal();payUtilityBill(\'' + bill.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>';
+  }
+  openModal('<i class="fas fa-file-invoice" style="color:#74B9FF"></i> Utility Bill Details', html, footer, 'sm');
+}
+
 
 // ============================================================
 // 3. PHOTO ATTACHMENTS — Tickets + Check-In/Check-Out

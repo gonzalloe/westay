@@ -40,7 +40,6 @@ const PAGE_MAP = {
     'tenancy-overview': landlordTenancyOverview,
     'maintenance-log': landlordMaintenanceLog,
     'payouts': landlordPayouts,
-    'documents': landlordDocuments,
     'reports': landlordReports
   },
   vendor: {

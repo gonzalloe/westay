@@ -4,10 +4,10 @@
 function tenantDashboard() {
   return '<div class="pg-h"><h1>Welcome back, Sarah!</h1><p>Cambridge A201 \u2022 Lease active until 31 Aug 2026</p></div>' +
     '<div class="stats">' +
-    stat('fa-receipt','#6C5CE7','RM 280','Rent Due','01 Apr','') +
-    stat('fa-calendar-check','#00B894','153','Days Remaining','','up') +
-    stat('fa-wrench','#FDCB6E','1','Open Requests','','') +
-    stat('fa-star','#FD79A8','4.8','Community Score','','up') +
+    cStat('fa-receipt','#6C5CE7','RM 280','Rent Due','01 Apr','','navigateTo(\"my-bills\")') +
+    cStat('fa-calendar-check','#00B894','153','Days Remaining','','up','navigateTo(\"my-contract\")') +
+    cStat('fa-wrench','#FDCB6E','1','Open Requests','','','navigateTo(\"maintenance\")') +
+    cStat('fa-star','#FD79A8','4.8','Community Score','','up','navigateTo(\"community\")') +
     '</div><div class="g2">' +
     panel('Quick Actions', '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
       qActionClick('fa-credit-card','#6C5CE7','Pay Rent','Due in 3 days','payMyRent()') +
@@ -36,7 +36,8 @@ function payMyRent() {
 }
 
 function tenantMyUnit() {
-  return '<div class="pg-h"><h1>My Unit</h1><p>Cambridge A201</p></div>' +
+  return '<div class="pg-h pg-row"><div><h1>My Unit</h1><p>Cambridge A201</p></div>' +
+    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showMyCheckInOutList()"><i class="fas fa-clipboard-check"></i> My Check-In/Out Evidence</button></div>' +
     '<div class="g2">' +
     panel('Unit Details', '<div class="dep-card">' +
       depRow('Property','Cambridge') + depRow('Room','A201 \u2022 Single Room') +
@@ -51,15 +52,38 @@ function tenantMyUnit() {
 
 function tenantMyBills() {
   const myBills = BILLS.filter(b => b.t === 'Sarah Lim');
+  // Also get utility bills for this tenant
+  const myUtilBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(b => b.tenant === 'Sarah Lim') : [];
+
   let rows = '';
   myBills.forEach(b => {
     const cls = b.s === 'Paid' ? 'b-ok' : b.s === 'Pending' ? 'b-warn' : 'b-err';
-    rows += '<tr><td style="font-weight:600">' + b.id + '</td><td>' + b.a + '</td><td><span class="bs ' + cls + '">' + b.s + '</span></td><td>' + b.d + '</td>' +
-      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="payBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>' : '<span style="color:var(--t3)">-</span>') + '</td></tr>';
+    rows += '<tr style="cursor:pointer" onclick="showBillDetail(\'' + b.id + '\')">' +
+      '<td style="font-weight:600">' + escHtml(b.id) + '</td><td>' + escHtml(b.a) + '</td>' +
+      '<td><span class="bs ' + cls + '">' + escHtml(b.s) + '</span></td><td>' + escHtml(b.d) + '</td>' +
+      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>' : '<button class="btn-s" onclick="event.stopPropagation();showBillDetail(\'' + b.id + '\')"><i class="fas fa-eye"></i></button>') + '</td></tr>';
   });
+
+  // Utility bills section
+  let utilRows = '';
+  myUtilBills.forEach(b => {
+    const cls = b.status === 'Paid' ? 'b-ok' : 'b-warn';
+    utilRows += '<tr style="cursor:pointer" onclick="showUtilityBillDetail(\'' + b.id + '\')">' +
+      '<td style="font-weight:600">' + escHtml(b.id) + '</td>' +
+      '<td>' + escHtml(b.period) + '</td>' +
+      '<td style="font-weight:600;color:var(--p)">RM ' + b.total.toFixed(2) + '</td>' +
+      '<td><span class="bs ' + cls + '">' + escHtml(b.status) + '</span></td>' +
+      '<td>' + (b.status !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payUtilityBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<button class="btn-s" onclick="event.stopPropagation();showUtilityBillDetail(\'' + b.id + '\')"><i class="fas fa-eye"></i></button>') + '</td></tr>';
+  });
+
   return '<div class="pg-h"><h1>My Bills</h1><p>View and pay your invoices</p></div>' +
-    '<div class="panel"><table><thead><tr><th>Invoice</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>' +
-    '<tbody>' + rows + '</tbody></table></div>';
+    '<div class="panel"><div class="panel-h"><h3>Rent & Invoices</h3></div>' +
+    '<table><thead><tr><th>Invoice</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table></div>' +
+    (utilRows ? '<div class="panel" style="margin-top:14px"><div class="panel-h"><h3>Utility Bills</h3>' +
+    '<button class="btn-s" onclick="tenantViewUtilityBills()"><i class="fas fa-bolt"></i> View All</button></div>' +
+    '<table><thead><tr><th>Bill ID</th><th>Period</th><th>Total</th><th>Status</th><th></th></tr></thead>' +
+    '<tbody>' + utilRows + '</tbody></table></div>' : '');
 }
 
 function tenantMyContract() {
@@ -83,8 +107,7 @@ function tenantMaintenance() {
 function tenantSmartAccess() {
   const lc = lockState === 'Locked' ? '#00B894' : '#FDCB6E';
   const li = lockState === 'Locked' ? 'fa-lock' : 'fa-lock-open';
-  return '<div class="pg-h pg-row"><div><h1>Smart Access</h1><p>Your digital key</p></div>' +
-    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showMyCheckInOutList()"><i class="fas fa-clipboard-check"></i> My Check-In/Out Photos</button></div>' +
+  return '<div class="pg-h"><h1>Smart Access</h1><p>Your digital key</p></div>' +
     '<div class="g2">' +
     panel('My Door Lock', '<div class="lock-card" style="padding:30px"><div class="lock-icon" style="font-size:48px;color:' + lc + '"><i class="fas ' + li + '"></i></div>' +
       '<div class="lock-status" style="background:' + lc + '22;color:' + lc + ';margin:14px 0">' + lockState + '</div>' +
@@ -139,11 +162,11 @@ function landlordDashboard() {
   const ll = getCurrentLandlord();
   return '<div class="pg-h"><h1>Portfolio Dashboard</h1><p>Welcome, ' + escHtml(ll.n) + '</p></div>' +
     '<div class="stats">' +
-    stat('fa-building','#FD79A8', ll.props.length, 'Properties','','') +
-    stat('fa-door-open','#6C5CE7', ll.units, 'Total Units','','') +
-    stat('fa-chart-pie','#00CEC9', ll.occ + '%', 'Occupancy','+3%','up') +
-    stat('fa-money-bill-wave','#00B894', ll.rev, 'Monthly Revenue','+8%','up') +
-    stat('fa-wallet','#FDCB6E', ll.payout, 'Est. Payout','','up') +
+    cStat('fa-building','#FD79A8', ll.props.length, 'Properties','','','navigateTo(\"my-properties\")') +
+    cStat('fa-door-open','#6C5CE7', ll.units, 'Total Units','','','navigateTo(\"my-properties\")') +
+    cStat('fa-chart-pie','#00CEC9', ll.occ + '%', 'Occupancy','+3%','up','navigateTo(\"reports\")') +
+    cStat('fa-money-bill-wave','#00B894', ll.rev, 'Monthly Revenue','+8%','up','navigateTo(\"financials\")') +
+    cStat('fa-wallet','#FDCB6E', ll.payout, 'Est. Payout','','up','navigateTo(\"payouts\")') +
     '</div><div class="g2">' +
     panel('My Properties', landlordPropsHtml(ll)) +
     panel('Recent Payouts', landlordPayoutsHtml()) +
