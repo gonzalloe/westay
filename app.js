@@ -202,7 +202,7 @@ function renderOccBars() {
   if (!el) return;
   el.innerHTML = '';
   PROPS.forEach(p => {
-    el.innerHTML += '<div class="occ-row"><div class="occ-name">' + p.n + '</div>' +
+    el.innerHTML += '<div class="occ-row"><div class="occ-name">' + escHtml(p.n) + '</div>' +
       '<div class="occ-track"><div class="occ-fill" style="width:' + p.o + '%;background:' + p.c + '"></div></div>' +
       '<div class="occ-pct" style="color:' + p.c + '">' + p.o + '%</div></div>';
   });
@@ -335,13 +335,21 @@ function quickAdd() {
       { icon:'fa-funnel-dollar', label:'Add Lead', fn:'addLeadModal()' },
       { icon:'fa-robot', label:'Automation Center', fn:'showAutomationDashboard()' },
       { icon:'fa-chart-bar', label:'Generate Report', fn:'autoGenerateReport()' },
-      { icon:'fa-file-contract', label:'Generate TA', fn:'autoGenerateTA()' }
+      { icon:'fa-file-contract', label:'Generate TA', fn:'autoGenerateTA()' },
+      { icon:'fa-file-alt', label:'Owner Report', fn:'generateOwnerReport()' },
+      { icon:'fa-bolt', label:'Utility Bills', fn:'showUtilityBillList()' },
+      { icon:'fa-clipboard-check', label:'Check-In/Out', fn:'showCheckInOutList()' }
     ],
     tenant: [
       { icon:'fa-wrench', label:'New Request', fn:'addTicketModal()' },
-      { icon:'fa-credit-card', label:'Pay Rent', fn:'payMyRent()' }
+      { icon:'fa-credit-card', label:'Pay Rent', fn:'payMyRent()' },
+      { icon:'fa-bolt', label:'Utility Bills', fn:'tenantViewUtilityBills()' },
+      { icon:'fa-sync', label:'Generate Utility Bills', fn:'generateUtilityBills()' },
+      { icon:'fa-clipboard-check', label:'Check-In/Out Photos', fn:'showCheckInOutList()' }
     ],
-    landlord: [],
+    landlord: [
+      { icon:'fa-file-alt', label:'My Owner Report', fn:'generateOwnerReport(ROLE_CONFIG.landlord.user.name)' }
+    ],
     vendor: [
       { icon:'fa-file-invoice-dollar', label:'Submit Invoice', fn:'submitVendorInvoiceModal()' }
     ],
@@ -376,7 +384,9 @@ function quickAdd() {
   function addMsg(text, type) {
     const div = document.createElement('div');
     div.className = 'ai-m ' + type;
-    div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    // Escape user input first, then apply safe formatting for bot messages
+    const safe = escHtml(text);
+    div.innerHTML = safe.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
     return div;
@@ -392,6 +402,8 @@ function quickAdd() {
       return AI_RESPONSES.overdue;
     if (lower.includes('maintenance') || lower.includes('ticket') || lower.includes('repair'))
       return AI_RESPONSES.maintenance;
+    if (lower.includes('owner report') || lower.includes('landlord report') || lower.includes('property report') || lower.includes('owner monthly'))
+      return AI_RESPONSES.report;
     if (lower.includes('report') || lower.includes('analytics') || lower.includes('generate report'))
       return AI_RESPONSES.report;
     if (lower.includes('contract') || lower.includes('tenancy agreement') || lower.includes('ta ') || lower.includes('lease'))
@@ -400,6 +412,12 @@ function quickAdd() {
       return AI_RESPONSES.smartlock;
     if (lower.includes('electric') || lower.includes('meter') || lower.includes('power') || lower.includes('disconnect'))
       return AI_RESPONSES.electric;
+    if (lower.includes('utility') || lower.includes('water bill') || lower.includes('electric bill') || lower.includes('utility bill'))
+      return AI_RESPONSES.utility;
+    if (lower.includes('photo') || lower.includes('picture') || lower.includes('image') || lower.includes('attach'))
+      return AI_RESPONSES.photo;
+    if (lower.includes('check-in') || lower.includes('check-out') || lower.includes('checkin') || lower.includes('checkout') || lower.includes('move-in') || lower.includes('move-out') || lower.includes('inspection'))
+      return AI_RESPONSES.checkinout;
     if (lower.includes('automat') || lower.includes('workflow') || lower.includes('auto'))
       return AI_RESPONSES.automation;
     return AI_RESPONSES['default'];
@@ -408,12 +426,14 @@ function quickAdd() {
   function handleSend() {
     const q = input.value.trim();
     if (!q) return;
-    addMsg(q, 'user');
+    if (rateLimited('aiChat', 1000)) return;
+    const sanitized = sanitizeInput(q).slice(0, 500);
+    addMsg(sanitized, 'user');
     input.value = '';
     const typing = addMsg('Thinking...', 'bot typing');
     setTimeout(() => {
       typing.remove();
-      addMsg(getResponse(q), 'bot');
+      addMsg(getResponse(sanitized), 'bot');
     }, 800 + Math.random() * 600);
   }
 

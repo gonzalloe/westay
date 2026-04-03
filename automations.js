@@ -11,12 +11,20 @@ const AUTOMATIONS = {
 
 function loadAutomationState() {
   try {
-    const d = JSON.parse(localStorage.getItem('westay_automations'));
+    const raw = localStorage.getItem('westay_automations');
+    if (!raw) return;
+    // Try deobfuscated first, fallback to legacy plain JSON
+    let d;
+    try {
+      d = JSON.parse(deobfuscate(raw));
+    } catch(e2) {
+      d = JSON.parse(raw);
+    }
     if (d) Object.assign(AUTOMATIONS, d);
   } catch(e) {}
 }
 function saveAutomationState() {
-  try { localStorage.setItem('westay_automations', JSON.stringify(AUTOMATIONS)); } catch(e) {}
+  try { localStorage.setItem('westay_automations', obfuscate(JSON.stringify(AUTOMATIONS))); } catch(e) {}
 }
 loadAutomationState();
 
@@ -170,7 +178,7 @@ function downloadReportCSV() {
 function printReport() {
   const modalBody = document.querySelector('.modal-body');
   if (!modalBody) return;
-  const w = window.open('', '_blank');
+  const w = window.open('', '_blank', 'noopener,noreferrer');
   w.document.write('<html><head><title>WeStay Monthly Report</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#1a1929;color:#e2e0f0;padding:30px;max-width:750px;margin:0 auto}*{box-sizing:border-box}</style></head><body>' + modalBody.innerHTML + '</body></html>');
   w.document.close();
   setTimeout(() => { w.print(); }, 500);
@@ -321,7 +329,7 @@ function signTA(taId, tenantName) {
 function printTA() {
   const modalBody = document.querySelector('.modal-body');
   if (!modalBody) return;
-  const w = window.open('', '_blank');
+  const w = window.open('', '_blank', 'noopener,noreferrer');
   w.document.write('<html><head><title>Tenancy Agreement</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#1a1929;color:#e2e0f0;padding:30px;max-width:700px;margin:0 auto}*{box-sizing:border-box}</style></head><body>' + modalBody.innerHTML + '</body></html>');
   w.document.close();
   setTimeout(() => { w.print(); }, 500);

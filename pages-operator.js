@@ -53,7 +53,7 @@ function operatorProperties() {
     const occ = Math.round(p.r * p.o / 100), vac = p.r - occ;
     cards += '<div class="prop-card" onclick="showPropertyDetail(\'' + p.n.replace(/'/g,"\\'") + '\')">' +
       '<div class="prop-img" style="background:linear-gradient(135deg,' + p.c + '22,' + p.c + '08)"><i class="fas ' + p.icon + '" style="color:' + p.c + '"></i></div>' +
-      '<div class="prop-body"><h4>' + p.n + '</h4><div class="prop-meta"><i class="fas fa-map-marker-alt"></i> ' + p.addr + '</div>' +
+      '<div class="prop-body"><h4>' + escHtml(p.n) + '</h4><div class="prop-meta"><i class="fas fa-map-marker-alt"></i> ' + escHtml(p.addr) + '</div>' +
       '<div class="prop-stats"><div class="ps"><div class="v">' + p.r + '</div><div class="l">Rooms</div></div>' +
       '<div class="ps"><div class="v">' + occ + '</div><div class="l">Occupied</div></div>' +
       '<div class="ps"><div class="v">' + vac + '</div><div class="l">Vacant</div></div></div>' +
@@ -68,7 +68,7 @@ function operatorTenants() {
   let rows = '';
   TENANTS.forEach((t, i) => {
     const cls = t.s === 'active' ? 'b-ok' : t.s === 'pending' ? 'b-warn' : 'b-err';
-    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + initials(t.n) + '</div>' + t.n + '</div></td><td>' + t.p + '</td><td>' + t.r + '</td><td><span class="bs ' + cls + '">' + t.s + '</span></td><td>' + t.e + '</td>' +
+    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(t.n)) + '</div>' + escHtml(t.n) + '</div></td><td>' + escHtml(t.p) + '</td><td>' + escHtml(t.r) + '</td><td><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></td><td>' + escHtml(t.e) + '</td>' +
       '<td><button class="btn-s" onclick="showTenantDetail(\'' + t.n.replace(/'/g,"\\'") + '\')"><i class="fas fa-eye"></i></button></td></tr>';
   });
   return '<div class="pg-h pg-row"><div><h1>Tenants</h1><p>' + TENANTS.length + ' tenants across all properties</p></div>' +
@@ -84,7 +84,7 @@ function operatorContracts() {
   let rows = '';
   CONTRACTS.forEach(c => {
     const cls = c.s === 'Active' ? 'b-ok' : c.s === 'Expiring Soon' ? 'b-warn' : 'b-info';
-    rows += '<tr><td style="font-weight:600">' + c.id + '</td><td>' + c.tenant + '</td><td>' + c.prop + '</td><td>' + c.rent + '</td><td>' + c.start + '</td><td>' + c.end + '</td><td><span class="bs ' + cls + '">' + c.s + '</span></td>' +
+    rows += '<tr><td style="font-weight:600">' + escHtml(c.id) + '</td><td>' + escHtml(c.tenant) + '</td><td>' + escHtml(c.prop) + '</td><td>' + escHtml(c.rent) + '</td><td>' + escHtml(c.start) + '</td><td>' + escHtml(c.end) + '</td><td><span class="bs ' + cls + '">' + escHtml(c.s) + '</span></td>' +
       '<td><button class="btn-s" onclick="toast(\'Contract PDF downloading...\',\'info\')"><i class="fas fa-file-pdf"></i></button></td></tr>';
   });
   return '<div class="pg-h pg-row"><div><h1>Contracts & E-Signing</h1><p>Manage tenancy agreements</p></div>' +
@@ -101,7 +101,7 @@ function operatorBilling() {
   let rows = '';
   BILLS.forEach(b => {
     const cls = b.s === 'Paid' ? 'b-ok' : b.s === 'Pending' ? 'b-warn' : 'b-err';
-    rows += '<tr><td style="font-weight:600">' + b.id + '</td><td>' + b.t + '</td><td>' + b.a + '</td><td><span class="bs ' + cls + '">' + b.s + '</span></td><td>' + b.d + '</td>' +
+    rows += '<tr><td style="font-weight:600">' + escHtml(b.id) + '</td><td>' + escHtml(b.t) + '</td><td>' + escHtml(b.a) + '</td><td><span class="bs ' + cls + '">' + escHtml(b.s) + '</span></td><td>' + escHtml(b.d) + '</td>' +
       '<td>' + (b.s !== 'Paid' ? '<button class="btn-s" onclick="payBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<button class="btn-s" onclick="showBillDetail(\'' + b.id + '\')"><i class="fas fa-eye"></i></button>') + '</td></tr>';
   });
   return '<div class="pg-h"><h1>Billing & Invoices</h1><p>Track all payments and invoices</p></div>' +
@@ -113,6 +113,7 @@ function operatorBilling() {
     '<div class="panel"><div class="panel-h"><h3>All Invoices</h3><div style="display:flex;gap:6px">' +
     '<button class="btn-s" onclick="showFilterModal(\'bills\')"><i class="fas fa-filter"></i> Filter</button>' +
     '<button class="btn-s" onclick="exportBills()"><i class="fas fa-download"></i> Export</button>' +
+    '<button class="btn" style="background:#74B9FF;color:#1a1929" onclick="showUtilityBillList()"><i class="fas fa-bolt"></i> Utility Bills</button>' +
     '<button class="btn btn-p" onclick="generateInvoicesModal()"><i class="fas fa-plus"></i> Generate</button></div></div>' +
     '<table><thead><tr><th>Invoice</th><th>Tenant</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table></div>';
@@ -135,7 +136,7 @@ function operatorVendors() {
   let cards = '';
   VENDORS.forEach(v => {
     cards += '<div class="prop-card" style="cursor:pointer"><div class="prop-body">' +
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="width:42px;height:42px;border-radius:12px;background:' + v.c + '22;color:' + v.c + ';display:flex;align-items:center;justify-content:center;font-size:18px"><i class="fas fa-tools"></i></div><div><h4 style="font-size:14px">' + v.n + '</h4><div style="font-size:11px;color:var(--t3)">' + v.type + '</div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="width:42px;height:42px;border-radius:12px;background:' + v.c + '22;color:' + v.c + ';display:flex;align-items:center;justify-content:center;font-size:18px"><i class="fas fa-tools"></i></div><div><h4 style="font-size:14px">' + escHtml(v.n) + '</h4><div style="font-size:11px;color:var(--t3)">' + escHtml(v.type) + '</div></div></div>' +
       '<div class="prop-stats"><div class="ps"><div class="v">' + v.jobs + '</div><div class="l">Jobs</div></div>' +
       '<div class="ps"><div class="v">\u2605 ' + v.rating + '</div><div class="l">Rating</div></div>' +
       '<div class="ps"><div class="v"><span class="bs b-ok">Active</span></div><div class="l">Status</div></div></div></div></div>';
@@ -170,7 +171,8 @@ function operatorIoT() {
     '</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:16px">' +
     '<button class="btn" style="background:#FD79A8;color:#fff" onclick="showSmartLockManager()"><i class="fas fa-fingerprint"></i> Fingerprint Manager</button>' +
-    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button></div>' +
+    '<button class="btn" style="background:#FDCB6E;color:#1a1929" onclick="showElectricMeterManager()"><i class="fas fa-bolt"></i> Electric Sub-Meters</button>' +
+    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showCheckInOutList()"><i class="fas fa-clipboard-check"></i> Check-In/Out</button></div>' +
     '<div class="panel"><h3 style="margin-bottom:14px">Smart Locks</h3>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">' + cards + '</div></div>';
 }
@@ -179,7 +181,7 @@ function operatorLeads() {
   let rows = '';
   LEADS.forEach((l,i) => {
     const cls = l.s === 'New' ? 'b-info' : l.s === 'Contacted' ? 'b-warn' : l.s === 'Viewing Scheduled' ? 'b-p' : 'b-ok';
-    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + initials(l.n) + '</div>' + l.n + '</div></td><td>' + l.src + '</td><td>' + l.prop + '</td><td>' + l.budget + '</td><td><span class="bs ' + cls + '">' + l.s + '</span></td><td>' + l.date + '</td>' +
+    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(l.n)) + '</div>' + escHtml(l.n) + '</div></td><td>' + escHtml(l.src) + '</td><td>' + escHtml(l.prop) + '</td><td>' + escHtml(l.budget) + '</td><td><span class="bs ' + cls + '">' + escHtml(l.s) + '</span></td><td>' + escHtml(l.date) + '</td>' +
       '<td><select class="btn-s" style="padding:3px 8px;font-size:10px" onchange="if(this.value)updateLeadStatus(\'' + l.n.replace(/'/g,"\\'") + '\',this.value)"><option value="">Action</option><option value="Contacted">Contacted</option><option value="Viewing Scheduled">Schedule Viewing</option><option value="Negotiating">Negotiating</option><option value="Converted">Converted</option></select></td></tr>';
   });
   return '<div class="pg-h pg-row"><div><h1>Leads & CRM</h1><p>Manage prospective tenants</p></div>' +
@@ -205,7 +207,8 @@ function operatorAI() {
 
 function operatorReports() {
   return '<div class="pg-h pg-row"><div><h1>Reports & Analytics</h1><p>Comprehensive portfolio analytics</p></div>' +
-    '<button class="btn" style="background:#6C5CE7;color:#fff" onclick="autoGenerateReport()"><i class="fas fa-robot"></i> Auto-Generate Report</button></div>' +
+    '<div style="display:flex;gap:6px"><button class="btn" style="background:#FD79A8;color:#fff" onclick="generateOwnerReport()"><i class="fas fa-file-alt"></i> Owner Report</button>' +
+    '<button class="btn" style="background:#6C5CE7;color:#fff" onclick="autoGenerateReport()"><i class="fas fa-robot"></i> Auto-Generate Report</button></div></div>' +
     '<div class="stats">' +
     stat('fa-chart-line','#6C5CE7','RM 82.4K','Monthly Revenue','+12%','up') +
     stat('fa-percentage','#00CEC9','91%','Avg Occupancy','+2%','up') +

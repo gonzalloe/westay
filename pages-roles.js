@@ -9,10 +9,12 @@ function tenantDashboard() {
     stat('fa-wrench','#FDCB6E','1','Open Requests','','') +
     stat('fa-star','#FD79A8','4.8','Community Score','','up') +
     '</div><div class="g2">' +
-    panel('Quick Actions', '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+    panel('Quick Actions', '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">' +
       qActionClick('fa-credit-card','#6C5CE7','Pay Rent','Due in 3 days','payMyRent()') +
       qActionClick('fa-wrench','#FDCB6E','New Request','Maintenance','addTicketModal()') +
       qActionClick('fa-key','#00B894','Door Access','Smart Lock','navigateTo(\"smart-access\")') +
+      qActionClick('fa-bolt','#74B9FF','Utility Bills','View & pay','tenantViewUtilityBills()') +
+      qActionClick('fa-clipboard-check','#00CEC9','Check-In/Out','Photo evidence','showCheckInOutList()') +
       qActionClick('fa-comments','#FD79A8','Community','3 new posts','navigateTo(\"community\")') + '</div>') +
     panel('My Bills', tenantBillsHtml()) +
     '</div><div class="g2">' +
@@ -43,7 +45,7 @@ function tenantMyUnit() {
     panel('Deposit Information', '<div class="dep-card">' +
       depRow('Security Deposit','RM 560') + depRow('Utility Deposit','RM 100') +
       depRow('Key Deposit','RM 50') + depRow('Total Deposit','RM 710') +
-      depRow('Status','<span class="bs b-ok">Held</span>') + '</div>') +
+      depRowHtml('Status','<span class="bs b-ok">Held</span>') + '</div>') +
     '</div>';
 }
 
@@ -68,7 +70,7 @@ function tenantMyContract() {
     '<div class="contract-actions"><button class="btn-s" onclick="autoGenerateTA(\'Sarah Lim\')"><i class="fas fa-eye"></i> View TA</button></div></div>' +
     '<div class="dep-card" style="margin-top:14px">' +
     depRow('Monthly Rent', c.rent) + depRow('Deposit', c.dep) + depRow('Start Date', c.start) +
-    depRow('End Date', c.end) + depRow('Status', '<span class="bs b-ok">' + c.s + '</span>') + '</div></div>';
+    depRow('End Date', c.end) + depRowHtml('Status', '<span class="bs b-ok">' + escHtml(c.s) + '</span>') + '</div></div>';
 }
 
 function tenantMaintenance() {
@@ -82,7 +84,8 @@ function tenantSmartAccess() {
   const lc = lockState === 'Locked' ? '#00B894' : '#FDCB6E';
   const li = lockState === 'Locked' ? 'fa-lock' : 'fa-lock-open';
   const lb = lockState === 'Locked' ? '<i class="fas fa-lock-open"></i> Unlock Door' : '<i class="fas fa-lock"></i> Lock Door';
-  return '<div class="pg-h"><h1>Smart Access</h1><p>Your digital key</p></div>' +
+  return '<div class="pg-h pg-row"><div><h1>Smart Access</h1><p>Your digital key</p></div>' +
+    '<button class="btn" style="background:#00CEC9;color:#fff" onclick="showCheckInOutList()"><i class="fas fa-clipboard-check"></i> Check-In/Out Photos</button></div>' +
     '<div class="g2">' +
     panel('My Door Lock', '<div class="lock-card" style="padding:30px"><div class="lock-icon" style="font-size:48px;color:' + lc + '"><i class="fas ' + li + '"></i></div>' +
       '<div class="lock-status" style="background:' + lc + '22;color:' + lc + ';margin:14px 0">' + lockState + '</div>' +
@@ -104,7 +107,9 @@ function tenantUtilities() {
       (myMeter.status.includes('Overdue') ? 'Please settle your outstanding bill to restore supply.' : 'Please contact management for details.') +
       ' Other rooms in the unit are not affected.</div></div><button class="btn btn-p" style="font-size:11px" onclick="payMyRent()"><i class="fas fa-credit-card"></i> Pay Now</button></div>';
   }
-  return '<div class="pg-h"><h1>Utilities</h1><p>Track your utility usage</p></div>' + warn +
+  return '<div class="pg-h pg-row"><div><h1>Utilities</h1><p>Track your utility usage</p></div>' +
+    '<div style="display:flex;gap:6px"><button class="btn" style="background:#74B9FF;color:#1a1929" onclick="tenantViewUtilityBills()"><i class="fas fa-file-invoice"></i> My Utility Bills</button>' +
+    '<button class="btn btn-p" onclick="generateUtilityBills()"><i class="fas fa-sync"></i> Auto-Generate</button></div></div>' + warn +
     '<div class="panel"><div style="display:grid;gap:10px">' +
     meterRow('fa-bolt','#FDCB6E','Electricity','This month', myMeter ? myMeter.kwh : '42.5','kWh') +
     meterRow('fa-tint','#74B9FF','Water','This month','3.2','m\u00B3') +
@@ -156,7 +161,7 @@ function landlordTenancyOverview() {
   let rows = '';
   myT.forEach(t => {
     const cls = t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err';
-    rows += '<tr><td style="cursor:pointer" onclick="showTenantDetail(\''+t.n.replace(/'/g,"\\'")+'\')">' + t.n + '</td><td>' + t.p + '</td><td>' + t.r + '</td><td><span class="bs '+cls+'">'+t.s+'</span></td><td>' + t.e + '</td></tr>';
+    rows += '<tr><td style="cursor:pointer" onclick="showTenantDetail(\''+t.n.replace(/'/g,"\\'")+'\')">' + escHtml(t.n) + '</td><td>' + escHtml(t.p) + '</td><td>' + escHtml(t.r) + '</td><td><span class="bs '+cls+'">'+escHtml(t.s)+'</span></td><td>' + escHtml(t.e) + '</td></tr>';
   });
   return '<div class="pg-h"><h1>Tenancy Overview</h1><p>Tenants in your properties</p></div>' +
     '<div class="panel"><table><thead><tr><th>Tenant</th><th>Unit</th><th>Rent</th><th>Status</th><th>Lease End</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
@@ -164,7 +169,17 @@ function landlordTenancyOverview() {
 function landlordMaintenanceLog() { return '<div class="pg-h"><h1>Maintenance Log</h1><p>Maintenance on your properties</p></div><div class="panel">' + ticketListHtml(TICKETS.slice(0,3)) + '</div>'; }
 function landlordPayouts() { return landlordFinancials(); }
 function landlordDocuments() { return '<div class="pg-h"><h1>Documents</h1><p>Property documents & contracts</p></div><div class="panel"><div style="display:grid;gap:10px">' + reportListHtml() + '</div></div>'; }
-function landlordReports() { return operatorReports(); }
+function landlordReports() {
+  return '<div class="pg-h pg-row"><div><h1>Reports</h1><p>View your property performance reports</p></div>' +
+    '<button class="btn" style="background:#FD79A8;color:#fff" onclick="generateOwnerReport(ROLE_CONFIG.landlord.user.name)"><i class="fas fa-file-alt"></i> My Owner Report</button></div>' +
+    '<div class="stats">' +
+    stat('fa-chart-line','#6C5CE7','RM 82.4K','Monthly Revenue','+12%','up') +
+    stat('fa-percentage','#00CEC9','91%','Avg Occupancy','+2%','up') +
+    stat('fa-clock','#00B894','1.8h','Avg Ticket Resolution','-0.5h','up') +
+    stat('fa-star','#FDCB6E','4.6','Tenant NPS','+0.3','up') +
+    '</div><div class="panel"><h3 style="margin-bottom:14px">Available Reports</h3>' +
+    reportListHtml() + '</div>';
+}
 
 // ---- VENDOR ----
 function vendorDashboard() {
@@ -215,10 +230,10 @@ function workOrdersInteractive(orders) {
   orders.forEach(wo => {
     const cls = wo.s==='Completed'?'b-ok':wo.s==='In Progress'?'b-warn':'b-info';
     const pcls = wo.pr==='High'?'b-err':wo.pr==='Medium'?'b-warn':'b-ok';
-    h += '<div class="tk"><div class="tk-ic" style="background:var(--p);color:#fff;font-size:11px;font-weight:700">' + wo.id.split('-')[1] + '</div>' +
-      '<div class="tk-info"><h5>' + wo.desc + '</h5><p>' + wo.loc + ' \u2022 ' + wo.date + '</p></div>' +
-      '<span class="bs ' + pcls + '" style="margin-right:6px">' + wo.pr + '</span>' +
-      '<span class="bs ' + cls + '">' + wo.s + '</span>';
+    h += '<div class="tk"><div class="tk-ic" style="background:var(--p);color:#fff;font-size:11px;font-weight:700">' + escHtml(wo.id.split('-')[1]) + '</div>' +
+      '<div class="tk-info"><h5>' + escHtml(wo.desc) + '</h5><p>' + escHtml(wo.loc) + ' \u2022 ' + escHtml(wo.date) + '</p></div>' +
+      '<span class="bs ' + pcls + '" style="margin-right:6px">' + escHtml(wo.pr) + '</span>' +
+      '<span class="bs ' + cls + '">' + escHtml(wo.s) + '</span>';
     if (wo.s !== 'Completed') {
       const next = wo.s === 'Pending' ? 'In Progress' : 'Completed';
       h += '<button class="btn-s" style="margin-left:6px" onclick="updateWorkOrderStatus(\'' + wo.id + '\',\'' + next + '\')"><i class="fas fa-' + (next==='In Progress'?'play':'check') + '"></i></button>';
@@ -251,7 +266,7 @@ function agentListings() {
   const vacant = PROPS.map(p=>({n:p.n,vac:p.r-Math.round(p.r*p.o/100),c:p.c,icon:p.icon})).filter(p=>p.vac>0);
   let cards = '';
   vacant.forEach(v => {
-    cards += '<div class="prop-card"><div class="prop-body"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:36px;height:36px;border-radius:10px;background:'+v.c+'22;color:'+v.c+';display:flex;align-items:center;justify-content:center"><i class="fas '+v.icon+'"></i></div><div><h4>'+v.n+'</h4><div style="font-size:11px;color:var(--t3)">'+v.vac+' rooms</div></div></div>' +
+    cards += '<div class="prop-card"><div class="prop-body"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:36px;height:36px;border-radius:10px;background:'+v.c+'22;color:'+v.c+';display:flex;align-items:center;justify-content:center"><i class="fas '+v.icon+'"></i></div><div><h4>'+escHtml(v.n)+'</h4><div style="font-size:11px;color:var(--t3)">'+v.vac+' rooms</div></div></div>' +
       '<button class="btn btn-p" style="width:100%;padding:7px;font-size:11px" onclick="toast(\'Listing link copied!\',\'success\')"><i class="fas fa-share"></i> Share Listing</button></div></div>';
   });
   return '<div class="pg-h"><h1>Available Listings</h1></div><div class="prop-grid">' + cards + '</div>';

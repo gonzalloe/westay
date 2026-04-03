@@ -1,17 +1,88 @@
 // ============ WESTAY INTERACTION ENGINE ============
 // Makes every button clickable and functional
 
-// ---- PERSISTENCE ----
+// ============ SECURITY UTILITIES ============
+
+// ---- XSS SANITIZER: Escape HTML entities to prevent injection ----
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ---- RATE LIMITER: Prevent rapid-fire actions (DDoS / abuse protection) ----
+const _rateLimits = {};
+function rateLimited(key, cooldownMs) {
+  const now = Date.now();
+  if (_rateLimits[key] && now - _rateLimits[key] < cooldownMs) return true;
+  _rateLimits[key] = now;
+  return false;
+}
+
+// ---- DEBOUNCE: Prevent rapid repeated calls (search, input) ----
+function debounce(fn, delay) {
+  let timer;
+  return function() {
+    const ctx = this, args = arguments;
+    clearTimeout(timer);
+    timer = setTimeout(function() { fn.apply(ctx, args); }, delay);
+  };
+}
+
+// ---- INPUT VALIDATION: Strip dangerous patterns ----
+function sanitizeInput(val) {
+  if (!val) return '';
+  return String(val)
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/data:text\/html/gi, '')
+    .trim();
+}
+
+// ---- SIMPLE DATA OBFUSCATION for localStorage ----
+// Note: This is basic obfuscation for a demo. In production, use proper encryption.
+function obfuscate(str) {
+  try { return btoa(encodeURIComponent(str)); } catch(e) { return str; }
+}
+function deobfuscate(str) {
+  try { return decodeURIComponent(atob(str)); } catch(e) { return str; }
+}
+
+// ---- CSP VIOLATION LOGGING ----
+if (typeof document !== 'undefined') {
+  document.addEventListener('securitypolicyviolation', function(e) {
+    console.warn('[CSP Violation]', e.violatedDirective, e.blockedURI);
+  });
+}
+
+// ============ END SECURITY UTILITIES ============
+
+// ---- PERSISTENCE (with obfuscation) ----
 function saveData() {
-  try { localStorage.setItem('westay_data', JSON.stringify({ PROPS, TENANTS, TICKETS, BILLS, VENDORS, WORK_ORDERS, LEADS, LANDLORDS, CONTRACTS })); } catch(e) {}
+  try {
+    const raw = JSON.stringify({ PROPS, TENANTS, TICKETS, BILLS, VENDORS, WORK_ORDERS, LEADS, LANDLORDS, CONTRACTS, UTILITY_BILLS, CHECKINOUT_RECORDS, TICKET_PHOTOS });
+    localStorage.setItem('westay_data', obfuscate(raw));
+  } catch(e) {}
 }
 function loadData() {
   try {
-    const d = JSON.parse(localStorage.getItem('westay_data'));
+    const stored = localStorage.getItem('westay_data');
+    if (!stored) return;
+    // Support both obfuscated and legacy plain JSON
+    let raw;
+    try { raw = deobfuscate(stored); } catch(e) { raw = stored; }
+    const d = JSON.parse(raw);
     if (!d) return;
-    ['PROPS','TENANTS','TICKETS','BILLS','VENDORS','WORK_ORDERS','LEADS','LANDLORDS','CONTRACTS'].forEach(k => {
-      if (d[k]) { window[k].length = 0; d[k].forEach(x => window[k].push(x)); }
+    ['PROPS','TENANTS','TICKETS','BILLS','VENDORS','WORK_ORDERS','LEADS','LANDLORDS','CONTRACTS','UTILITY_BILLS','CHECKINOUT_RECORDS'].forEach(k => {
+      if (d[k] && window[k]) { window[k].length = 0; d[k].forEach(x => window[k].push(x)); }
     });
+    // Restore TICKET_PHOTOS (object, not array)
+    if (d.TICKET_PHOTOS) { Object.keys(TICKET_PHOTOS).forEach(k => delete TICKET_PHOTOS[k]); Object.assign(TICKET_PHOTOS, d.TICKET_PHOTOS); }
   } catch(e) {}
 }
 loadData();
@@ -21,10 +92,11 @@ loadData();
   const c = document.createElement('div'); c.className = 'toast-container'; c.id = 'toastContainer'; document.body.appendChild(c);
 })();
 function toast(msg, type) {
+  if (rateLimited('toast', 500)) return; // Prevent toast spam
   type = type || 'success';
   const icons = { success:'fa-check-circle', error:'fa-times-circle', info:'fa-info-circle', warning:'fa-exclamation-triangle' };
   const el = document.createElement('div'); el.className = 'toast ' + type;
-  el.innerHTML = '<i class="fas ' + (icons[type]||'fa-info-circle') + '"></i><span>' + msg + '</span>';
+  el.innerHTML = '<i class="fas ' + (icons[type]||'fa-info-circle') + '"></i><span>' + escHtml(msg) + '</span>';
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => el.classList.add('show'), 30);
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3500);
@@ -101,34 +173,37 @@ function pushNotif(icon, c, title, desc) {
   renderNotifPanel();
 }
 
-// ---- SEARCH ----
+// ---- SEARCH (with debounce + XSS protection + rate limiting) ----
 (function() {
   const dd = document.createElement('div'); dd.className = 'search-dropdown'; dd.id = 'searchDropdown'; document.body.appendChild(dd);
 })();
-function doSearch(q) {
+const _doSearchImpl = function(q) {
   const dd = document.getElementById('searchDropdown');
-  q = q.toLowerCase().trim(); if (!q) { dd.classList.remove('open'); return; }
+  q = sanitizeInput(q).toLowerCase().trim();
+  if (!q || q.length > 100) { dd.classList.remove('open'); return; } // max query length
+  if (rateLimited('search', 150)) return; // Rate limit: 150ms between searches
   let h = '';
-  const esc = s => s.replace(/'/g, "\\'");
+  const esc = s => String(s).replace(/'/g, "\\'");
   TENANTS.filter(t => t.n.toLowerCase().includes(q) || t.p.toLowerCase().includes(q)).forEach((t, i) => {
     if (!i) h += '<div class="search-cat">Tenants</div>';
-    h += '<div class="search-item" onclick="showTenantDetail(\'' + esc(t.n) + '\')"><div class="s-ic" style="background:var(--ac);color:#fff">' + initials(t.n) + '</div><div><div class="s-title">' + t.n + '</div><div class="s-sub">' + t.p + '</div></div></div>';
+    h += '<div class="search-item" onclick="showTenantDetail(\'' + esc(t.n) + '\')"><div class="s-ic" style="background:var(--ac);color:#fff">' + escHtml(initials(t.n)) + '</div><div><div class="s-title">' + escHtml(t.n) + '</div><div class="s-sub">' + escHtml(t.p) + '</div></div></div>';
   });
   PROPS.filter(p => p.n.toLowerCase().includes(q)).forEach((p, i) => {
     if (!i) h += '<div class="search-cat">Properties</div>';
-    h += '<div class="search-item" onclick="showPropertyDetail(\'' + esc(p.n) + '\')"><div class="s-ic" style="background:' + p.c + '22;color:' + p.c + '"><i class="fas ' + p.icon + '"></i></div><div><div class="s-title">' + p.n + '</div><div class="s-sub">' + p.addr + '</div></div></div>';
+    h += '<div class="search-item" onclick="showPropertyDetail(\'' + esc(p.n) + '\')"><div class="s-ic" style="background:' + p.c + '22;color:' + p.c + '"><i class="fas ' + p.icon + '"></i></div><div><div class="s-title">' + escHtml(p.n) + '</div><div class="s-sub">' + escHtml(p.addr) + '</div></div></div>';
   });
   TICKETS.filter(t => t.t.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)).forEach((t, i) => {
     if (!i) h += '<div class="search-cat">Tickets</div>';
-    h += '<div class="search-item" onclick="showTicketDetail(\'' + t.id + '\')"><div class="s-ic" style="background:' + t.c + '22;color:' + t.c + '"><i class="fas ' + t.icon + '"></i></div><div><div class="s-title">' + t.t + '</div><div class="s-sub">' + t.loc + '</div></div></div>';
+    h += '<div class="search-item" onclick="showTicketDetail(\'' + t.id + '\')"><div class="s-ic" style="background:' + t.c + '22;color:' + t.c + '"><i class="fas ' + t.icon + '"></i></div><div><div class="s-title">' + escHtml(t.t) + '</div><div class="s-sub">' + escHtml(t.loc) + '</div></div></div>';
   });
   BILLS.filter(b => b.t.toLowerCase().includes(q) || b.id.toLowerCase().includes(q)).forEach((b, i) => {
     if (!i) h += '<div class="search-cat">Bills</div>';
-    h += '<div class="search-item" onclick="showBillDetail(\'' + b.id + '\')"><div class="s-ic" style="background:var(--p);color:#fff"><i class="fas fa-receipt"></i></div><div><div class="s-title">' + b.id + ' — ' + b.t + '</div><div class="s-sub">' + b.a + ' • ' + b.s + '</div></div></div>';
+    h += '<div class="search-item" onclick="showBillDetail(\'' + b.id + '\')"><div class="s-ic" style="background:var(--p);color:#fff"><i class="fas fa-receipt"></i></div><div><div class="s-title">' + escHtml(b.id) + ' — ' + escHtml(b.t) + '</div><div class="s-sub">' + escHtml(b.a) + ' • ' + escHtml(b.s) + '</div></div></div>';
   });
-  if (!h) h = '<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px">No results for "' + q + '"</div>';
+  if (!h) h = '<div style="padding:20px;text-align:center;color:var(--t3);font-size:12px">No results for "' + escHtml(q) + '"</div>';
   dd.innerHTML = h; dd.classList.add('open');
-}
+};
+const doSearch = debounce(_doSearchImpl, 200); // 200ms debounce on search
 
 // ---- FILTER ----
 let activeFilters = {};

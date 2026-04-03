@@ -1,18 +1,25 @@
 // ============ SHARED UI HELPERS ============
+// Note: Data passed to these functions should already be escaped by callers.
+// Functions that display user-modifiable data (names, phones, etc.) use escHtml().
 
 function stat(icon, color, val, label, change, dir) {
   const chCls = dir === 'up' ? 'ch up' : dir === 'dn' ? 'ch dn' : 'ch';
   return '<div class="stat"><div class="top"><div class="ic" style="background:' + color + '22;color:' + color + '"><i class="fas ' + icon + '"></i></div>' +
-    (change ? '<span class="' + chCls + '">' + change + '</span>' : '') +
-    '</div><div class="val">' + val + '</div><div class="lbl">' + label + '</div></div>';
+    (change ? '<span class="' + chCls + '">' + escHtml(change) + '</span>' : '') +
+    '</div><div class="val">' + escHtml(String(val)) + '</div><div class="lbl">' + escHtml(label) + '</div></div>';
 }
 
 function panel(title, content, extraClass) {
-  return '<div class="panel' + (extraClass ? ' ' + extraClass : '') + '"><div class="panel-h"><h3>' + title + '</h3></div>' + content + '</div>';
+  return '<div class="panel' + (extraClass ? ' ' + extraClass : '') + '"><div class="panel-h"><h3>' + escHtml(title) + '</h3></div>' + content + '</div>';
 }
 
 function depRow(k, v) {
-  return '<div class="dep-row"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+  return '<div class="dep-row"><div class="k">' + escHtml(String(k)) + '</div><div class="v">' + escHtml(String(v)) + '</div></div>';
+}
+
+// Variant: allows trusted HTML in value (use only for static badge markup, never user input)
+function depRowHtml(k, vHtml) {
+  return '<div class="dep-row"><div class="k">' + escHtml(String(k)) + '</div><div class="v">' + vHtml + '</div></div>';
 }
 
 function qAction(icon, color, title, sub) {
@@ -32,8 +39,8 @@ function ticketListHtml(tickets) {
   tickets.forEach(tk => {
     const pcls = tk.pr === 'High' ? 'b-err' : tk.pr === 'Medium' ? 'b-warn' : 'b-ok';
     html += '<div class="tk" onclick="showTicketDetail(\'' + tk.id + '\')"><div class="tk-ic" style="background:' + tk.c + '22;color:' + tk.c + '"><i class="fas ' + tk.icon + '"></i></div>' +
-      '<div class="tk-info"><h5>' + tk.t + '</h5><p>' + tk.loc + ' \u2022 ' + tk.time + '</p></div>' +
-      '<span class="bs ' + pcls + '">' + tk.pr + '</span></div>';
+      '<div class="tk-info"><h5>' + escHtml(tk.t) + '</h5><p>' + escHtml(tk.loc) + ' \u2022 ' + escHtml(tk.time) + '</p></div>' +
+      '<span class="bs ' + pcls + '">' + escHtml(tk.pr) + '</span></div>';
   });
   return html;
 }
@@ -108,7 +115,7 @@ function propCardHtml(p) {
   const occ = Math.round(p.r * p.o / 100), vac = p.r - occ;
   return '<div class="prop-card"><div class="prop-img" style="background:linear-gradient(135deg,' + p.c + '22,' + p.c + '08)">' +
     '<i class="fas ' + p.icon + '" style="color:' + p.c + '"></i></div>' +
-    '<div class="prop-body"><h4>' + p.n + '</h4><div class="prop-meta"><i class="fas fa-map-marker-alt"></i> ' + p.addr + '</div>' +
+    '<div class="prop-body"><h4>' + escHtml(p.n) + '</h4><div class="prop-meta"><i class="fas fa-map-marker-alt"></i> ' + escHtml(p.addr) + '</div>' +
     '<div class="prop-stats"><div class="ps"><div class="v">' + p.r + '</div><div class="l">Rooms</div></div>' +
     '<div class="ps"><div class="v">' + occ + '</div><div class="l">Occupied</div></div>' +
     '<div class="ps"><div class="v">' + vac + '</div><div class="l">Vacant</div></div></div>' +
@@ -121,7 +128,7 @@ function landlordPropsHtml(ll) {
     const p = PROPS.find(x => x.n === name);
     if (p) html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:10px">' +
       '<div style="width:40px;height:40px;border-radius:10px;background:' + p.c + '22;color:' + p.c + ';display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fas ' + p.icon + '"></i></div>' +
-      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + p.n + '</div><div style="font-size:10px;color:var(--t3)">' + p.r + ' rooms \u2022 ' + p.o + '% occupied</div></div>' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + escHtml(p.n) + '</div><div style="font-size:10px;color:var(--t3)">' + p.r + ' rooms \u2022 ' + p.o + '% occupied</div></div>' +
       '<div style="font-size:14px;font-weight:700;color:var(--ok)">RM ' + (p.rev/1000).toFixed(1) + 'K</div></div>';
   });
   return html;
@@ -146,10 +153,10 @@ function workOrdersHtml(orders) {
   orders.forEach(wo => {
     const cls = wo.s === 'Completed' ? 'b-ok' : wo.s === 'In Progress' ? 'b-warn' : 'b-info';
     const pcls = wo.pr === 'High' ? 'b-err' : wo.pr === 'Medium' ? 'b-warn' : 'b-ok';
-    html += '<div class="tk"><div class="tk-ic" style="background:var(--p);color:#fff;font-size:11px;font-weight:700">' + wo.id.split('-')[1] + '</div>' +
-      '<div class="tk-info"><h5>' + wo.desc + '</h5><p>' + wo.loc + ' \u2022 ' + wo.date + '</p></div>' +
-      '<span class="bs ' + pcls + '" style="margin-right:6px">' + wo.pr + '</span>' +
-      '<span class="bs ' + cls + '">' + wo.s + '</span></div>';
+    html += '<div class="tk"><div class="tk-ic" style="background:var(--p);color:#fff;font-size:11px;font-weight:700">' + escHtml(wo.id.split('-')[1]) + '</div>' +
+      '<div class="tk-info"><h5>' + escHtml(wo.desc) + '</h5><p>' + escHtml(wo.loc) + ' \u2022 ' + escHtml(wo.date) + '</p></div>' +
+      '<span class="bs ' + pcls + '" style="margin-right:6px">' + escHtml(wo.pr) + '</span>' +
+      '<span class="bs ' + cls + '">' + escHtml(wo.s) + '</span></div>';
   });
   return html;
 }
@@ -159,9 +166,9 @@ function agentLeadsHtml() {
   LEADS.slice(0, 4).forEach((l, i) => {
     const cls = l.s === 'New' ? 'b-info' : l.s === 'Contacted' ? 'b-warn' : l.s === 'Viewing Scheduled' ? 'b-p' : 'b-ok';
     html += '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:8px">' +
-      '<div style="width:32px;height:32px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + initials(l.n) + '</div>' +
-      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + l.n + '</div><div style="font-size:10px;color:var(--t3)">' + l.src + ' \u2022 ' + l.budget + '</div></div>' +
-      '<span class="bs ' + cls + '">' + l.s + '</span></div>';
+      '<div style="width:32px;height:32px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(l.n)) + '</div>' +
+      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + escHtml(l.n) + '</div><div style="font-size:10px;color:var(--t3)">' + escHtml(l.src) + ' \u2022 ' + escHtml(l.budget) + '</div></div>' +
+      '<span class="bs ' + cls + '">' + escHtml(l.s) + '</span></div>';
   });
   return html;
 }
@@ -170,8 +177,8 @@ function agentLeadsTableHtml() {
   let rows = '';
   LEADS.forEach((l, i) => {
     const cls = l.s === 'New' ? 'b-info' : l.s === 'Contacted' ? 'b-warn' : l.s === 'Viewing Scheduled' ? 'b-p' : 'b-ok';
-    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + initials(l.n) + '</div>' + l.n + '</div></td>' +
-      '<td>' + l.phone + '</td><td>' + l.src + '</td><td>' + l.prop + '</td><td>' + l.budget + '</td><td><span class="bs ' + cls + '">' + l.s + '</span></td></tr>';
+    rows += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:30px;height:30px;border-radius:8px;background:' + COLORS[i%8] + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">' + escHtml(initials(l.n)) + '</div>' + escHtml(l.n) + '</div></td>' +
+      '<td>' + escHtml(l.phone) + '</td><td>' + escHtml(l.src) + '</td><td>' + escHtml(l.prop) + '</td><td>' + escHtml(l.budget) + '</td><td><span class="bs ' + cls + '">' + escHtml(l.s) + '</span></td></tr>';
   });
   return '<table><thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Property</th><th>Budget</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
@@ -213,20 +220,175 @@ function predMainHtml() {
 
 function reportListHtml() {
   const reports = [
-    { n:'Monthly Revenue Report', icon:'fa-chart-line', c:'#6C5CE7', desc:'Revenue breakdown by property', fn:'exportBills()' },
-    { n:'Occupancy Trend', icon:'fa-chart-bar', c:'#00CEC9', desc:'6-month occupancy analysis', fn:'toast(\"Report generating...\",\"info\")' },
-    { n:'Maintenance Summary', icon:'fa-wrench', c:'#FDCB6E', desc:'Ticket analysis & vendor performance', fn:'exportTickets()' },
-    { n:'Tenant Satisfaction (NPS)', icon:'fa-star', c:'#FD79A8', desc:'Monthly survey results', fn:'toast(\"NPS report generating...\",\"info\")' },
-    { n:'Financial P&L', icon:'fa-money-bill-wave', c:'#00B894', desc:'Profit & loss statement', fn:'toast(\"P&L report generating...\",\"info\")' }
+    { n:'Monthly Revenue Report', icon:'fa-chart-line', c:'#6C5CE7', desc:'Revenue breakdown by property', exportFn:'exportBills()', previewFn:'previewRevenueReport()' },
+    { n:'Occupancy Trend', icon:'fa-chart-bar', c:'#00CEC9', desc:'6-month occupancy analysis', exportFn:'toast(\"Exporting...\",\"info\")', previewFn:'previewOccupancyReport()' },
+    { n:'Maintenance Summary', icon:'fa-wrench', c:'#FDCB6E', desc:'Ticket analysis & vendor performance', exportFn:'exportTickets()', previewFn:'previewMaintenanceReport()' },
+    { n:'Tenant Satisfaction (NPS)', icon:'fa-star', c:'#FD79A8', desc:'Monthly survey results', exportFn:'toast(\"Exporting NPS...\",\"info\")', previewFn:'previewNPSReport()' },
+    { n:'Financial P&L', icon:'fa-money-bill-wave', c:'#00B894', desc:'Profit & loss statement', exportFn:'toast(\"Exporting P&L...\",\"info\")', previewFn:'previewPLReport()' }
   ];
   let html = '';
   reports.forEach(r => {
-    html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:10px;cursor:pointer" onclick="' + r.fn + '">' +
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:10px">' +
       '<div style="width:38px;height:38px;border-radius:10px;background:' + r.c + '22;color:' + r.c + ';display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fas ' + r.icon + '"></i></div>' +
       '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + r.n + '</div><div style="font-size:10px;color:var(--t3)">' + r.desc + '</div></div>' +
-      '<button class="btn-s"><i class="fas fa-download"></i> Export</button></div>';
+      '<div style="display:flex;gap:6px"><button class="btn-s" onclick="' + r.previewFn + '" style="background:var(--p);color:#fff"><i class="fas fa-eye"></i> Preview</button>' +
+      '<button class="btn-s" onclick="' + r.exportFn + '"><i class="fas fa-download"></i> Export</button></div></div>';
   });
   return html;
+}
+
+// ---- REPORT PREVIEW FUNCTIONS ----
+function previewRevenueReport() {
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var totalRev = PROPS.reduce(function(s,p){return s+p.rev;},0);
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00CEC9);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDCCA</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">MONTHLY REVENUE REPORT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + ' &bull; WeStay Portfolio</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00B894">RM ' + (totalRev/1000).toFixed(1) + 'K</div><div style="font-size:10px;color:var(--t3)">Total Revenue</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#6C5CE7">' + PROPS.length + '</div><div style="font-size:10px;color:var(--t3)">Properties</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00CEC9">' + BILLS.filter(function(b){return b.s==="Paid";}).length + '</div><div style="font-size:10px;color:var(--t3)">Paid Invoices</div></div></div>';
+  html += '<table><thead><tr><th>Property</th><th>Rooms</th><th>Occupancy</th><th style="text-align:right">Revenue (RM)</th></tr></thead><tbody>';
+  PROPS.forEach(function(p) {
+    html += '<tr><td style="font-weight:600">' + escHtml(p.n) + '</td><td>' + p.r + '</td><td>' + p.o + '%</td><td style="text-align:right;font-weight:600">RM ' + p.rev.toLocaleString() + '</td></tr>';
+  });
+  html += '<tr style="background:var(--bg2)"><td colspan="3" style="font-weight:700;text-align:right">Total</td><td style="text-align:right;font-size:15px;font-weight:800;color:var(--ok)">RM ' + totalRev.toLocaleString() + '</td></tr></tbody></table>';
+  html += '<div style="margin-top:16px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-file-invoice" style="color:var(--warn);margin-right:6px"></i>Billing Summary</div>';
+  var paid=BILLS.filter(function(b){return b.s==="Paid";}).length, pend=BILLS.filter(function(b){return b.s==="Pending";}).length, over=BILLS.filter(function(b){return b.s==="Overdue";}).length;
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+    '<div style="padding:10px;background:#00B89422;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#00B894">' + paid + '</div><div style="font-size:10px;color:var(--t3)">Paid</div></div>' +
+    '<div style="padding:10px;background:#FDCB6E22;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#FDCB6E">' + pend + '</div><div style="font-size:10px;color:var(--t3)">Pending</div></div>' +
+    '<div style="padding:10px;background:#E1705522;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#E17055">' + over + '</div><div style="font-size:10px;color:var(--t3)">Overdue</div></div></div></div>';
+  html += '</div>';
+  openModal('<i class="fas fa-chart-line" style="color:#6C5CE7"></i> Monthly Revenue Report', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="exportBills()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+function previewOccupancyReport() {
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var totalRooms = PROPS.reduce(function(s,p){return s+p.r;},0);
+  var totalOcc = PROPS.reduce(function(s,p){return s+Math.round(p.r*p.o/100);},0);
+  var avgOcc = Math.round(totalOcc/totalRooms*100);
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#00CEC9,#6C5CE7);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83C\uDFE2</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">OCCUPANCY TREND REPORT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + '</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#00CEC9">' + avgOcc + '%</div><div style="font-size:10px;color:var(--t3)">Avg Occupancy</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#6C5CE7">' + totalOcc + '/' + totalRooms + '</div><div style="font-size:10px;color:var(--t3)">Occupied/Total</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:20px;font-weight:800;color:#FD79A8">' + (totalRooms-totalOcc) + '</div><div style="font-size:10px;color:var(--t3)">Vacant Rooms</div></div></div>';
+  html += '<table><thead><tr><th>Property</th><th>Rooms</th><th>Occupied</th><th>Vacant</th><th>Rate</th></tr></thead><tbody>';
+  PROPS.forEach(function(p) {
+    var occ=Math.round(p.r*p.o/100), vac=p.r-occ;
+    html += '<tr><td style="font-weight:600">' + escHtml(p.n) + '</td><td>' + p.r + '</td><td>' + occ + '</td><td>' + vac + '</td>' +
+      '<td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden"><div style="width:'+p.o+'%;height:100%;background:'+p.c+';border-radius:3px"></div></div><span style="font-weight:600;font-size:11px">' + p.o + '%</span></div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  openModal('<i class="fas fa-chart-bar" style="color:#00CEC9"></i> Occupancy Trend Report', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+function previewMaintenanceReport() {
+  var now = new Date();
+  var month = ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()];
+  var year = now.getFullYear();
+  var high=TICKETS.filter(function(t){return t.pr==='High';}).length, med=TICKETS.filter(function(t){return t.pr==='Medium';}).length, low=TICKETS.filter(function(t){return t.pr==='Low';}).length;
+  var open=TICKETS.filter(function(t){return t.s!=='Completed';}).length, closed=TICKETS.filter(function(t){return t.s==='Completed';}).length;
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#FDCB6E,#E17055);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDD27</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">MAINTENANCE SUMMARY</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + month + ' ' + year + '</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#FDCB6E">' + TICKETS.length + '</div><div style="font-size:10px;color:var(--t3)">Total</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#E17055">' + open + '</div><div style="font-size:10px;color:var(--t3)">Open</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#00B894">' + closed + '</div><div style="font-size:10px;color:var(--t3)">Resolved</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#6C5CE7">1.8h</div><div style="font-size:10px;color:var(--t3)">Avg Response</div></div></div>';
+  html += '<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-exclamation-triangle" style="color:#E17055;margin-right:6px"></i>By Priority</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+    '<div style="padding:10px;background:#E1705522;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#E17055">' + high + '</div><div style="font-size:10px;color:var(--t3)">High</div></div>' +
+    '<div style="padding:10px;background:#FDCB6E22;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#FDCB6E">' + med + '</div><div style="font-size:10px;color:var(--t3)">Medium</div></div>' +
+    '<div style="padding:10px;background:#00B89422;border-radius:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:#00B894">' + low + '</div><div style="font-size:10px;color:var(--t3)">Low</div></div></div></div>';
+  html += '<table><thead><tr><th>Ticket</th><th>Issue</th><th>Location</th><th>Priority</th><th>Status</th></tr></thead><tbody>';
+  TICKETS.forEach(function(tk) {
+    var cls=tk.s==='Completed'?'b-ok':tk.s==='In Progress'?'b-warn':'b-info';
+    var pcls=tk.pr==='High'?'b-err':tk.pr==='Medium'?'b-warn':'b-ok';
+    html += '<tr><td style="font-weight:600">' + escHtml(tk.id) + '</td><td>' + escHtml(tk.t) + '</td><td>' + escHtml(tk.loc) + '</td><td><span class="bs ' + pcls + '">' + escHtml(tk.pr) + '</span></td><td><span class="bs ' + cls + '">' + escHtml(tk.s) + '</span></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  openModal('<i class="fas fa-wrench" style="color:#FDCB6E"></i> Maintenance Summary', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="exportTickets()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+function previewNPSReport() {
+  var html = '<div style="max-width:550px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#FD79A8,#6C5CE7);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\u2B50</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">TENANT SATISFACTION (NPS)</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">Monthly Survey Results</div></div>';
+  html += '<div style="text-align:center;padding:20px;background:var(--bg3);border-radius:16px;margin-bottom:16px">' +
+    '<div style="font-size:48px;font-weight:800;color:#FD79A8">4.6</div><div style="font-size:12px;color:var(--t3)">Overall NPS Score (out of 5.0)</div></div>';
+  var cats = [{n:'Living Conditions',s:4.7,c:'#00B894'},{n:'Management Response',s:4.5,c:'#6C5CE7'},{n:'Maintenance Speed',s:4.3,c:'#FDCB6E'},{n:'Community Vibe',s:4.8,c:'#00CEC9'},{n:'Value for Money',s:4.4,c:'#FD79A8'}];
+  html += '<div style="display:grid;gap:10px">';
+  cats.forEach(function(cat) {
+    var pct = Math.round(cat.s/5*100);
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:10px"><div style="flex:1"><div style="font-size:12px;font-weight:600;margin-bottom:4px">' + cat.n + '</div>' +
+      '<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+cat.c+';border-radius:3px"></div></div></div>' +
+      '<div style="font-size:14px;font-weight:700;color:'+cat.c+'">' + cat.s + '</div></div>';
+  });
+  html += '</div></div>';
+  openModal('<i class="fas fa-star" style="color:#FD79A8"></i> Tenant NPS Report', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'sm');
+}
+
+function previewPLReport() {
+  var totalRev = PROPS.reduce(function(s,p){return s+p.rev;},0);
+  var totalExp = 0;
+  Object.values(PROPERTY_EXPENSES).forEach(function(e){totalExp += Object.values(e).reduce(function(s,v){return s+v;},0);});
+  var netProfit = totalRev - totalExp;
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  html += '<div style="background:linear-gradient(135deg,#00B894,#6C5CE7);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDCB0</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">FINANCIAL P&L STATEMENT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">Portfolio Summary</div></div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#00B894">RM ' + totalRev.toLocaleString() + '</div><div style="font-size:10px;color:var(--t3)">Total Revenue</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#E17055">RM ' + totalExp.toLocaleString() + '</div><div style="font-size:10px;color:var(--t3)">Total Expenses</div></div>' +
+    '<div style="text-align:center;padding:14px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:' + (netProfit>=0?'#6C5CE7':'#E17055') + '">RM ' + netProfit.toLocaleString() + '</div><div style="font-size:10px;color:var(--t3)">Net Profit</div></div></div>';
+  html += '<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-arrow-up" style="color:#00B894;margin-right:6px"></i>Revenue by Property</div>';
+  html += '<table><thead><tr><th>Property</th><th style="text-align:right">Revenue</th><th style="text-align:right">Expenses</th><th style="text-align:right">Net</th></tr></thead><tbody>';
+  PROPS.forEach(function(p) {
+    var exp = PROPERTY_EXPENSES[p.n] ? Object.values(PROPERTY_EXPENSES[p.n]).reduce(function(s,v){return s+v;},0) : 0;
+    var net = p.rev - exp;
+    html += '<tr><td style="font-weight:600">' + escHtml(p.n) + '</td><td style="text-align:right;color:var(--ok)">RM ' + p.rev.toLocaleString() + '</td><td style="text-align:right;color:var(--err)">RM ' + exp.toLocaleString() + '</td><td style="text-align:right;font-weight:700;color:' + (net>=0?'var(--ok)':'var(--err)') + '">RM ' + net.toLocaleString() + '</td></tr>';
+  });
+  html += '<tr style="background:var(--bg2)"><td style="font-weight:700;text-align:right">Total</td><td style="text-align:right;font-weight:700;color:var(--ok)">RM ' + totalRev.toLocaleString() + '</td><td style="text-align:right;font-weight:700;color:var(--err)">RM ' + totalExp.toLocaleString() + '</td><td style="text-align:right;font-size:15px;font-weight:800;color:' + (netProfit>=0?'var(--ok)':'var(--err)') + '">RM ' + netProfit.toLocaleString() + '</td></tr>';
+  html += '</tbody></table></div></div>';
+  openModal('<i class="fas fa-money-bill-wave" style="color:#00B894"></i> Financial P&L Statement', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+function printReportPreview() {
+  var modalBody = document.querySelector('.modal-body');
+  if (!modalBody) return;
+  var w = window.open('', '_blank', 'noopener,noreferrer');
+  w.document.write('<html><head><title>Report Preview</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#1a1929;color:#e2e0f0;padding:30px;max-width:750px;margin:0 auto}*{box-sizing:border-box}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #2D2B4A;font-size:11px}</style></head><body>' + modalBody.innerHTML + '</body></html>');
+  w.document.close();
+  setTimeout(function() { w.print(); }, 500);
 }
 
 function settingsGeneral() {

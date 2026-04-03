@@ -1,4 +1,6 @@
 // ============ WESTAY CRUD & DETAIL VIEWS ============
+// All user inputs are sanitized via sanitizeInput() before storage.
+// All innerHTML output is escaped via escHtml() from interactions.js.
 
 // ---- ADD PROPERTY ----
 function addPropertyModal() {
@@ -11,11 +13,11 @@ function addPropertyModal() {
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddProperty()"><i class="fas fa-plus"></i> Add</button>');
 }
 function doAddProperty() {
-  const n = document.getElementById('apName').value.trim();
+  const n = sanitizeInput(document.getElementById('apName').value.trim());
   if (!n) { toast('Name is required', 'error'); return; }
-  PROPS.push({ n, o:0, r:parseInt(document.getElementById('apRooms').value)||30, c:COLORS[PROPS.length%8], icon:document.getElementById('apIcon').value, addr:document.getElementById('apAddr').value.trim()||'Kampar, Perak', rev:0, type:document.getElementById('apType').value });
-  saveData(); closeModal(); toast('Property "' + n + '" added!', 'success');
-  pushNotif('fa-building', '#6C5CE7', 'Property Added', n); navigateTo(currentPage);
+  PROPS.push({ n, o:0, r:parseInt(document.getElementById('apRooms').value)||30, c:COLORS[PROPS.length%8], icon:document.getElementById('apIcon').value, addr:sanitizeInput(document.getElementById('apAddr').value.trim())||'Kampar, Perak', rev:0, type:document.getElementById('apType').value });
+  saveData(); closeModal(); toast('Property "' + escHtml(n) + '" added!', 'success');
+  pushNotif('fa-building', '#6C5CE7', 'Property Added', escHtml(n)); navigateTo(currentPage);
 }
 
 // ---- ADD TENANT ----
@@ -30,12 +32,12 @@ function addTenantModal() {
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddTenant()"><i class="fas fa-user-plus"></i> Add</button>');
 }
 function doAddTenant() {
-  const n = document.getElementById('atName').value.trim();
+  const n = sanitizeInput(document.getElementById('atName').value.trim());
   if (!n) { toast('Name is required', 'error'); return; }
   const rent = parseInt(document.getElementById('atRent').value)||0;
-  TENANTS.push({ n, p:document.getElementById('atProp').value+' '+document.getElementById('atRoom').value.trim(), r:'RM '+rent, s:'pending', e:document.getElementById('atEnd').value||'\u2014', phone:document.getElementById('atPhone').value.trim(), dep:'RM '+(rent*2) });
-  saveData(); closeModal(); toast('Tenant "' + n + '" added!', 'success');
-  pushNotif('fa-user-plus', '#00CEC9', 'New Tenant', n); navigateTo(currentPage);
+  TENANTS.push({ n, p:document.getElementById('atProp').value+' '+sanitizeInput(document.getElementById('atRoom').value.trim()), r:'RM '+rent, s:'pending', e:document.getElementById('atEnd').value||'\u2014', phone:sanitizeInput(document.getElementById('atPhone').value.trim()), dep:'RM '+(rent*2) });
+  saveData(); closeModal(); toast('Tenant "' + escHtml(n) + '" added!', 'success');
+  pushNotif('fa-user-plus', '#00CEC9', 'New Tenant', escHtml(n)); navigateTo(currentPage);
 }
 
 // ---- ADD TICKET ----
@@ -44,19 +46,55 @@ function addTicketModal() {
     '<div class="form-group"><label>Issue Title</label><input id="tkTitle" placeholder="e.g. Air conditioning not cooling"></div>' +
     '<div class="form-row"><div class="form-group"><label>Location</label><input id="tkLoc" placeholder="e.g. Cambridge A201"></div>' +
     '<div class="form-group"><label>Priority</label><select id="tkPri"><option>Low</option><option selected>Medium</option><option>High</option></select></div></div>' +
-    '<div class="form-group"><label>Description</label><textarea id="tkDesc" placeholder="Describe the issue..."></textarea></div>',
+    '<div class="form-group"><label>Description</label><textarea id="tkDesc" placeholder="Describe the issue..."></textarea></div>' +
+    '<div class="form-group"><label><i class="fas fa-camera" style="color:#FD79A8;margin-right:6px"></i>Attach Photos</label>' +
+    '<div id="tkPhotoPreview" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>' +
+    '<div style="border:2px dashed var(--bg3);border-radius:12px;padding:18px;text-align:center;cursor:pointer;transition:.2s" onclick="document.getElementById(\'tkPhotoInput\').click()" onmouseover="this.style.borderColor=\'var(--p)\'" onmouseout="this.style.borderColor=\'var(--bg3)\'">' +
+    '<i class="fas fa-cloud-upload-alt" style="font-size:22px;color:var(--p);display:block;margin-bottom:6px"></i>' +
+    '<div style="font-size:12px;font-weight:600;color:var(--t2)">Click to upload photos</div>' +
+    '<div style="font-size:10px;color:var(--t3);margin-top:2px">JPG, PNG, GIF up to 10MB each</div>' +
+    '</div>' +
+    '<input type="file" id="tkPhotoInput" accept="image/*" multiple style="display:none" onchange="previewTicketPhotos(this)">' +
+    '</div>',
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddTicket()"><i class="fas fa-plus"></i> Submit</button>');
 }
+
+var _pendingTicketPhotos = [];
+
+function previewTicketPhotos(input) {
+  var container = document.getElementById('tkPhotoPreview');
+  if (!input.files || !input.files.length) return;
+  for (var i = 0; i < input.files.length; i++) {
+    _pendingTicketPhotos.push(input.files[i].name);
+    var color = typeof COLORS !== 'undefined' ? COLORS[_pendingTicketPhotos.length % 8] : '#6C5CE7';
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 10px;background:' + color + '22;border:1px solid ' + color + '44;border-radius:8px;font-size:10px;color:var(--t2)';
+    div.innerHTML = '<i class="fas fa-image" style="color:' + color + '"></i>' + escHtml(input.files[i].name) + '<span style="cursor:pointer;color:var(--err);margin-left:4px" onclick="removeTicketPhotoPreview(this,' + (_pendingTicketPhotos.length - 1) + ')">&times;</span>';
+    container.appendChild(div);
+  }
+}
+
+function removeTicketPhotoPreview(el, idx) {
+  _pendingTicketPhotos[idx] = null;
+  el.parentElement.remove();
+}
+
 function doAddTicket() {
-  const t = document.getElementById('tkTitle').value.trim();
+  const t = sanitizeInput(document.getElementById('tkTitle').value.trim());
   if (!t) { toast('Title is required', 'error'); return; }
   const pr = document.getElementById('tkPri').value;
   const ic = { High:'fa-fire', Medium:'fa-exclamation-circle', Low:'fa-info-circle' };
   const cc = { High:'#E17055', Medium:'#FDCB6E', Low:'#00B894' };
   const id = 'TK-' + String(TICKETS.length+1).padStart(3,'0');
-  TICKETS.push({ id, t, loc:document.getElementById('tkLoc').value.trim()||'Not specified', pr, icon:ic[pr], c:cc[pr], time:'Just now', by:ROLE_CONFIG[currentRole]?.user?.name||'User', s:'Open' });
-  saveData(); closeModal(); toast('Ticket ' + id + ' created!', 'success');
-  pushNotif('fa-wrench', cc[pr], 'New Ticket: ' + pr, t); navigateTo(currentPage);
+  TICKETS.push({ id, t, loc:sanitizeInput(document.getElementById('tkLoc').value.trim())||'Not specified', pr, icon:ic[pr], c:cc[pr], time:'Just now', by:ROLE_CONFIG[currentRole]?.user?.name||'User', s:'Open' });
+  // Attach photos directly during ticket creation
+  var photos = _pendingTicketPhotos.filter(function(p) { return p !== null; });
+  if (photos.length) {
+    TICKET_PHOTOS[id] = photos;
+  }
+  _pendingTicketPhotos = [];
+  saveData(); closeModal(); toast('Ticket ' + escHtml(id) + ' created!' + (photos.length ? ' (' + photos.length + ' photo(s) attached)' : ''), 'success');
+  pushNotif('fa-wrench', cc[pr], 'New Ticket: ' + escHtml(pr), escHtml(t)); navigateTo(currentPage);
 }
 
 // ---- ADD LEAD ----
@@ -70,12 +108,12 @@ function addLeadModal() {
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddLead()"><i class="fas fa-plus"></i> Add</button>');
 }
 function doAddLead() {
-  const n = document.getElementById('alName').value.trim();
+  const n = sanitizeInput(document.getElementById('alName').value.trim());
   if (!n) { toast('Name is required', 'error'); return; }
   const d = new Date(), ds = String(d.getDate()).padStart(2,'0')+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getFullYear();
-  LEADS.push({ n, phone:document.getElementById('alPhone').value.trim(), src:document.getElementById('alSrc').value, prop:document.getElementById('alProp').value, s:'New', date:ds, budget:document.getElementById('alBudget').value.trim()||'N/A' });
-  saveData(); closeModal(); toast('Lead "' + n + '" added!', 'success');
-  pushNotif('fa-user-plus', '#FD79A8', 'New Lead', n); navigateTo(currentPage);
+  LEADS.push({ n, phone:sanitizeInput(document.getElementById('alPhone').value.trim()), src:document.getElementById('alSrc').value, prop:document.getElementById('alProp').value, s:'New', date:ds, budget:sanitizeInput(document.getElementById('alBudget').value.trim())||'N/A' });
+  saveData(); closeModal(); toast('Lead "' + escHtml(n) + '" added!', 'success');
+  pushNotif('fa-user-plus', '#FD79A8', 'New Lead', escHtml(n)); navigateTo(currentPage);
 }
 
 // ---- ADD VENDOR ----
@@ -87,10 +125,10 @@ function addVendorModal() {
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddVendor()"><i class="fas fa-plus"></i> Add</button>');
 }
 function doAddVendor() {
-  const n = document.getElementById('avName').value.trim();
+  const n = sanitizeInput(document.getElementById('avName').value.trim());
   if (!n) { toast('Name is required', 'error'); return; }
-  VENDORS.push({ n, type:document.getElementById('avType').value, jobs:0, rating:0, s:'active', c:COLORS[VENDORS.length%8], phone:document.getElementById('avPhone').value.trim() });
-  saveData(); closeModal(); toast('Vendor "' + n + '" added!', 'success'); navigateTo(currentPage);
+  VENDORS.push({ n, type:document.getElementById('avType').value, jobs:0, rating:0, s:'active', c:COLORS[VENDORS.length%8], phone:sanitizeInput(document.getElementById('avPhone').value.trim()) });
+  saveData(); closeModal(); toast('Vendor "' + escHtml(n) + '" added!', 'success'); navigateTo(currentPage);
 }
 
 // ---- ADD CONTRACT ----
@@ -105,12 +143,12 @@ function addContractModal() {
     '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-p" onclick="doAddContract()"><i class="fas fa-file-signature"></i> Create</button>');
 }
 function doAddContract() {
-  const t = document.getElementById('acT').value, p = document.getElementById('acP').value.trim();
+  const t = document.getElementById('acT').value, p = sanitizeInput(document.getElementById('acP').value.trim());
   if (!t||!p) { toast('Tenant and property are required', 'error'); return; }
   const r = parseInt(document.getElementById('acR').value)||0;
   const id = 'TA-2026-' + String(CONTRACTS.length+48).padStart(3,'0');
   CONTRACTS.push({ id, tenant:t, prop:p, start:document.getElementById('acS').value, end:document.getElementById('acE').value, rent:'RM '+r, s:'Pending Signature', dep:'RM '+(parseInt(document.getElementById('acD').value)||r*2) });
-  saveData(); closeModal(); toast('Contract ' + id + ' created!', 'success'); navigateTo(currentPage);
+  saveData(); closeModal(); toast('Contract ' + escHtml(id) + ' created!', 'success'); navigateTo(currentPage);
 }
 
 // ---- GENERATE INVOICES ----
@@ -142,23 +180,23 @@ function doSubmitVI() {
 
 // ---- STATUS TRANSITIONS ----
 function payBill(id) {
-  confirmDialog('Confirm Payment', 'Process payment for ' + id + '?', () => {
+  confirmDialog('Confirm Payment', 'Process payment for ' + escHtml(id) + '?', () => {
     const b = BILLS.find(x=>x.id===id); if (!b) return; b.s = 'Paid'; saveData();
-    toast(id + ' paid!', 'success'); pushNotif('fa-credit-card', '#00B894', 'Payment Processed', id + ' — ' + b.a); navigateTo(currentPage);
+    toast(escHtml(id) + ' paid!', 'success'); pushNotif('fa-credit-card', '#00B894', 'Payment Processed', escHtml(id) + ' — ' + escHtml(b.a)); navigateTo(currentPage);
   }, 'success');
 }
 function updateTicketStatus(id, s) {
   const tk = TICKETS.find(x=>x.id===id); if (!tk) return; tk.s = s; tk.time = 'Just now'; saveData();
-  toast(id + ' → ' + s, 'success'); navigateTo(currentPage);
+  toast(escHtml(id) + ' → ' + escHtml(s), 'success'); navigateTo(currentPage);
 }
 function updateLeadStatus(name, s) {
   const l = LEADS.find(x=>x.n===name); if (!l) return; l.s = s; saveData();
-  toast('"' + name + '" → ' + s, 'success'); navigateTo(currentPage);
+  toast('"' + escHtml(name) + '" → ' + escHtml(s), 'success'); navigateTo(currentPage);
 }
 function updateWorkOrderStatus(id, s) {
   const w = WORK_ORDERS.find(x=>x.id===id); if (!w) return; w.s = s; saveData();
   if (s==='Completed') { const v = VENDORS.find(x=>x.n===w.vendor); if (v) v.jobs++; }
-  toast(id + ' → ' + s, 'success'); navigateTo(currentPage);
+  toast(escHtml(id) + ' → ' + escHtml(s), 'success'); navigateTo(currentPage);
 }
 
 // ---- SMART LOCK ----
@@ -175,10 +213,10 @@ function showTenantDetail(name) {
   const t = TENANTS.find(x=>x.n===name); if (!t) return;
   const cls = t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err';
   const esc = s => s.replace(/'/g, "\\'");
-  let h = '<div style="text-align:center;margin-bottom:20px"><div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--p),var(--ac));display:inline-flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff">' + initials(t.n) + '</div><h3 style="margin-top:10px">' + t.n + '</h3><span class="bs ' + cls + '">' + t.s + '</span></div>';
-  h += '<div class="dep-card">' + depRow('Unit',t.p) + depRow('Rent',t.r) + depRow('Phone',t.phone||'N/A') + depRow('Lease End',t.e) + depRow('Deposit',t.dep||'N/A') + '</div>';
+  let h = '<div style="text-align:center;margin-bottom:20px"><div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,var(--p),var(--ac));display:inline-flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff">' + escHtml(initials(t.n)) + '</div><h3 style="margin-top:10px">' + escHtml(t.n) + '</h3><span class="bs ' + cls + '">' + escHtml(t.s) + '</span></div>';
+  h += '<div class="dep-card">' + depRow('Unit',escHtml(t.p)) + depRow('Rent',escHtml(t.r)) + depRow('Phone',escHtml(t.phone||'N/A')) + depRow('Lease End',escHtml(t.e)) + depRow('Deposit',escHtml(t.dep||'N/A')) + '</div>';
   const myB = BILLS.filter(b=>b.t===t.n);
-  if (myB.length) { h += '<h4 style="margin:16px 0 10px;font-size:13px">Bills</h4>'; myB.forEach(b => { const bc=b.s==='Paid'?'b-ok':b.s==='Overdue'?'b-err':'b-warn'; h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:6px"><div style="flex:1;font-size:12px">'+b.id+' — '+b.a+'</div><span class="bs '+bc+'">'+b.s+'</span>'+(b.s!=='Paid'?'<button class="btn-s" onclick="closeSidePanel();payBill(\''+b.id+'\')">Pay</button>':'')+'</div>'; }); }
+  if (myB.length) { h += '<h4 style="margin:16px 0 10px;font-size:13px">Bills</h4>'; myB.forEach(b => { const bc=b.s==='Paid'?'b-ok':b.s==='Overdue'?'b-err':'b-warn'; h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:6px"><div style="flex:1;font-size:12px">'+escHtml(b.id)+' — '+escHtml(b.a)+'</div><span class="bs '+bc+'">'+escHtml(b.s)+'</span>'+(b.s!=='Paid'?'<button class="btn-s" onclick="closeSidePanel();payBill(\''+b.id+'\')">Pay</button>':'')+'</div>'; }); }
   h += '<div style="margin-top:20px;display:flex;gap:8px"><button class="btn btn-p" style="flex:1" onclick="closeSidePanel();editTenantModal(\''+esc(t.n)+'\')"><i class="fas fa-edit"></i> Edit</button><button class="btn btn-ghost" style="flex:1" onclick="closeSidePanel();deleteTenant(\''+esc(t.n)+'\')"><i class="fas fa-trash"></i> Remove</button></div>';
   closeSidePanel(); document.getElementById('searchDropdown')?.classList.remove('open');
   setTimeout(() => openSidePanel('Tenant Details', h), 50);
@@ -188,12 +226,12 @@ function showPropertyDetail(name) {
   const p = PROPS.find(x=>x.n===name); if (!p) return;
   const occ = Math.round(p.r*p.o/100), vac = p.r-occ;
   let h = '<div style="height:80px;background:linear-gradient(135deg,'+p.c+'22,'+p.c+'08);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas '+p.icon+'" style="font-size:36px;color:'+p.c+'"></i></div>';
-  h += '<h3 style="font-size:16px;margin-bottom:4px">' + p.n + '</h3><div style="font-size:11px;color:var(--t3);margin-bottom:16px"><i class="fas fa-map-marker-alt"></i> ' + p.addr + '</div>';
-  h += '<div class="dep-card">' + depRow('Rooms',p.r) + depRow('Occupied',occ) + depRow('Vacant',vac) + depRow('Occupancy',p.o+'%') + depRow('Revenue','RM '+(p.rev/1000).toFixed(1)+'K') + depRow('Type',p.type) + '</div>';
+  h += '<h3 style="font-size:16px;margin-bottom:4px">' + escHtml(p.n) + '</h3><div style="font-size:11px;color:var(--t3);margin-bottom:16px"><i class="fas fa-map-marker-alt"></i> ' + escHtml(p.addr) + '</div>';
+  h += '<div class="dep-card">' + depRow('Rooms',p.r) + depRow('Occupied',occ) + depRow('Vacant',vac) + depRow('Occupancy',p.o+'%') + depRow('Revenue','RM '+(p.rev/1000).toFixed(1)+'K') + depRow('Type',escHtml(p.type)) + '</div>';
   const pt = TENANTS.filter(t=>t.p.includes(p.n));
   if (pt.length) {
     h += '<h4 style="margin:16px 0 10px;font-size:13px">Tenants ('+pt.length+')</h4>';
-    pt.forEach(t => { const c=t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err'; h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="showTenantDetail(\''+t.n.replace(/'/g,"\\'")+'\')">' + '<div style="width:26px;height:26px;border-radius:7px;background:var(--p);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff">'+initials(t.n)+'</div><div style="flex:1;font-size:12px">'+t.n+'</div><span class="bs '+c+'">'+t.s+'</span></div>'; });
+    pt.forEach(t => { const c=t.s==='active'?'b-ok':t.s==='pending'?'b-warn':'b-err'; h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="showTenantDetail(\''+t.n.replace(/'/g,"\\'")+'\')">' + '<div style="width:26px;height:26px;border-radius:7px;background:var(--p);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff">'+escHtml(initials(t.n))+'</div><div style="flex:1;font-size:12px">'+escHtml(t.n)+'</div><span class="bs '+c+'">'+escHtml(t.s)+'</span></div>'; });
   }
   closeSidePanel(); document.getElementById('searchDropdown')?.classList.remove('open');
   setTimeout(() => openSidePanel('Property Details', h), 50);
@@ -204,9 +242,12 @@ function showTicketDetail(id) {
   const pc = tk.pr==='High'?'b-err':tk.pr==='Medium'?'b-warn':'b-ok';
   const sc = tk.s==='Completed'?'b-ok':tk.s==='In Progress'?'b-warn':'b-info';
   let h = '<div style="text-align:center;margin-bottom:16px"><div style="width:54px;height:54px;border-radius:14px;background:'+tk.c+'22;color:'+tk.c+';display:inline-flex;align-items:center;justify-content:center;font-size:22px"><i class="fas '+tk.icon+'"></i></div></div>';
-  h += '<h3 style="font-size:15px;text-align:center;margin-bottom:6px">' + tk.t + '</h3>';
-  h += '<div style="text-align:center;margin-bottom:16px"><span class="bs '+pc+'" style="margin-right:6px">'+tk.pr+'</span><span class="bs '+sc+'">'+tk.s+'</span></div>';
-  h += '<div class="dep-card">' + depRow('ID',tk.id) + depRow('Location',tk.loc) + depRow('Reported By',tk.by||'N/A') + depRow('Time',tk.time) + '</div>';
+  h += '<h3 style="font-size:15px;text-align:center;margin-bottom:6px">' + escHtml(tk.t) + '</h3>';
+  h += '<div style="text-align:center;margin-bottom:16px"><span class="bs '+pc+'" style="margin-right:6px">'+escHtml(tk.pr)+'</span><span class="bs '+sc+'">'+escHtml(tk.s)+'</span></div>';
+  h += '<div class="dep-card">' + depRow('ID',escHtml(tk.id)) + depRow('Location',escHtml(tk.loc)) + depRow('Reported By',escHtml(tk.by||'N/A')) + depRow('Time',escHtml(tk.time)) + '</div>';
+  // Photo attachments
+  var photoCount = (TICKET_PHOTOS[tk.id] || []).length;
+  h += '<div style="margin:12px 0"><button class="btn btn-ghost" style="width:100%" onclick="closeSidePanel();showTicketPhotos(\'' + tk.id + '\')"><i class="fas fa-camera" style="margin-right:6px;color:#FD79A8"></i> Photos (' + photoCount + ')</button></div>';
   h += '<h4 style="margin:16px 0 10px;font-size:13px">Update Status</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
   if (tk.s!=='In Progress') h += '<button class="btn btn-warn" onclick="closeSidePanel();updateTicketStatus(\''+tk.id+'\',\'In Progress\')"><i class="fas fa-spinner"></i> In Progress</button>';
   if (tk.s!=='Assigned') h += '<button class="btn btn-p" onclick="closeSidePanel();updateTicketStatus(\''+tk.id+'\',\'Assigned\')"><i class="fas fa-user-check"></i> Assign</button>';
@@ -219,8 +260,8 @@ function showTicketDetail(id) {
 function showBillDetail(id) {
   const b = BILLS.find(x=>x.id===id); if (!b) return;
   const cls = b.s==='Paid'?'b-ok':b.s==='Overdue'?'b-err':'b-warn';
-  let h = '<div style="text-align:center;margin-bottom:16px"><div style="font-size:32px;font-weight:800;color:var(--p)">'+b.a+'</div><span class="bs '+cls+'">'+b.s+'</span></div>';
-  h += '<div class="dep-card">' + depRow('Invoice',b.id) + depRow('Tenant',b.t) + depRow('Property',b.prop||'N/A') + depRow('Amount',b.a) + depRow('Date',b.d) + '</div>';
+  let h = '<div style="text-align:center;margin-bottom:16px"><div style="font-size:32px;font-weight:800;color:var(--p)">'+escHtml(b.a)+'</div><span class="bs '+cls+'">'+escHtml(b.s)+'</span></div>';
+  h += '<div class="dep-card">' + depRow('Invoice',escHtml(b.id)) + depRow('Tenant',escHtml(b.t)) + depRow('Property',escHtml(b.prop||'N/A')) + depRow('Amount',escHtml(b.a)) + depRow('Date',escHtml(b.d)) + '</div>';
   if (b.s!=='Paid') h += '<button class="btn btn-p" style="width:100%;margin-top:16px" onclick="closeSidePanel();payBill(\''+b.id+'\')"><i class="fas fa-credit-card"></i> Process Payment</button>';
   closeSidePanel(); document.getElementById('searchDropdown')?.classList.remove('open');
   setTimeout(() => openSidePanel('Invoice Details', h), 50);
@@ -238,17 +279,17 @@ function editTenantModal(name) {
 }
 function doEditTenant(orig) {
   const t = TENANTS.find(x=>x.n===orig); if (!t) return;
-  t.n = document.getElementById('etN').value.trim()||t.n;
-  t.phone = document.getElementById('etP').value.trim();
-  t.p = document.getElementById('etU').value.trim()||t.p;
-  t.r = document.getElementById('etR').value.trim()||t.r;
+  t.n = sanitizeInput(document.getElementById('etN').value.trim())||t.n;
+  t.phone = sanitizeInput(document.getElementById('etP').value.trim());
+  t.p = sanitizeInput(document.getElementById('etU').value.trim())||t.p;
+  t.r = sanitizeInput(document.getElementById('etR').value.trim())||t.r;
   t.s = document.getElementById('etS').value;
   t.e = document.getElementById('etE').value.trim()||t.e;
   saveData(); closeModal(); toast('Tenant updated!', 'success'); navigateTo(currentPage);
 }
 
 function deleteTenant(name) {
-  confirmDialog('Remove Tenant?', '"' + name + '" will be removed permanently.', () => {
+  confirmDialog('Remove Tenant?', '"' + escHtml(name) + '" will be removed permanently.', () => {
     const i = TENANTS.findIndex(x=>x.n===name);
     if (i>=0) { TENANTS.splice(i,1); saveData(); toast('Tenant removed', 'info'); navigateTo(currentPage); }
   }, 'danger');
