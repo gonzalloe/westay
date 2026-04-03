@@ -69,16 +69,37 @@ function activityHtml() {
 }
 
 function tenantBillsHtml() {
-  const myBills = BILLS.filter(b => b.t === 'Sarah Lim');
-  let html = '';
-  myBills.forEach(b => {
-    const cls = b.s === 'Paid' ? 'b-ok' : 'b-warn';
-    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:8px">' +
-      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + b.id + '</div><div style="font-size:10px;color:var(--t3)">' + b.d + '</div></div>' +
-      '<div style="font-size:14px;font-weight:700">' + b.a + '</div>' +
-      '<span class="bs ' + cls + '">' + b.s + '</span></div>';
+  var tenant = (typeof ROLE_CONFIG !== 'undefined' && typeof currentRole !== 'undefined' && ROLE_CONFIG[currentRole]) ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var myRentBills = BILLS.filter(function(b) { return b.t === tenant; });
+  var myUtilBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant; }) : [];
+
+  // Combine both types
+  var allBills = [];
+  myRentBills.forEach(function(b) {
+    allBills.push({ id: b.id, type: 'Rent', amount: b.a, status: b.s, date: b.d, billType: 'rent', icon: 'fa-home', color: '#6C5CE7' });
   });
-  return html || '<div style="color:var(--t3);font-size:12px;padding:10px">No bills found</div>';
+  myUtilBills.forEach(function(b) {
+    allBills.push({ id: b.id, type: 'Utility', amount: 'RM ' + b.total.toFixed(2), status: b.status, date: b.period, billType: 'utility', icon: 'fa-bolt', color: '#FDCB6E' });
+  });
+
+  if (!allBills.length) return '<div style="color:var(--t3);font-size:12px;padding:10px">No bills found</div>';
+
+  var html = '';
+  allBills.forEach(function(b) {
+    var isPaid = b.status === 'Paid';
+    var cls = isPaid ? 'b-ok' : b.status === 'Pending' ? 'b-warn' : 'b-err';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:8px;cursor:pointer" onclick="navigateTo(\'my-bills\')">' +
+      '<div style="width:30px;height:30px;border-radius:8px;background:' + b.color + '22;color:' + b.color + ';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0"><i class="fas ' + b.icon + '"></i></div>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">' + escHtml(b.id) + ' <span style="font-size:9px;color:var(--t3);font-weight:400">' + escHtml(b.type) + '</span></div><div style="font-size:10px;color:var(--t3)">' + escHtml(b.date) + '</div></div>' +
+      '<div style="font-size:13px;font-weight:700;white-space:nowrap">' + escHtml(b.amount) + '</div>' +
+      (isPaid ? '<span class="bs ' + cls + '" style="flex-shrink:0">' + escHtml(b.status) + '</span>' :
+        '<button class="btn btn-p" style="padding:4px 10px;font-size:10px;flex-shrink:0" onclick="event.stopPropagation();tenantPayWithGateway(\'' + b.billType + '\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>') +
+      '</div>';
+  });
+
+  // View all link
+  html += '<div style="text-align:center;padding:8px"><button class="btn-s" style="font-size:10px" onclick="navigateTo(\'my-bills\')"><i class="fas fa-arrow-right"></i> View All Bills</button></div>';
+  return html;
 }
 
 function eventsHtml() {

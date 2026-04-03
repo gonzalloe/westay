@@ -419,81 +419,441 @@ function printUtilityBill() {
   setTimeout(function() { w.print(); }, 500);
 }
 
-// Tenant view of their utility bills
+// ============================================================
+// PAYMENT GATEWAY — Tenant Online Payment Simulation
+// ============================================================
+
+function tenantPayWithGateway(billType, billId) {
+  var bill, amount, label;
+  if (billType === 'rent') {
+    bill = BILLS.find(function(b) { return b.id === billId; });
+    if (!bill || bill.s === 'Paid') { toast('Bill already paid or not found', 'info'); return; }
+    amount = parseInt(bill.a.replace(/[^\d]/g, '')) || 0;
+    label = 'Rent — ' + escHtml(bill.id);
+  } else {
+    bill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+    if (!bill || bill.status === 'Paid') { toast('Bill already paid or not found', 'info'); return; }
+    amount = bill.total;
+    label = 'Utility — ' + escHtml(bill.id);
+  }
+
+  var html = '<div style="max-width:420px;margin:0 auto">';
+  // Gateway header
+  html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00B894);padding:22px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDD12</div>' +
+    '<h3 style="color:#fff;font-size:15px;margin-bottom:2px">SECURE PAYMENT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:11px">WeStay Payment Gateway &bull; 256-bit SSL</div></div>';
+
+  // Amount display
+  html += '<div style="text-align:center;padding:18px;background:var(--bg3);border-radius:14px;margin-bottom:16px">' +
+    '<div style="font-size:10px;color:var(--t3);margin-bottom:4px">' + label + '</div>' +
+    '<div style="font-size:32px;font-weight:800;color:var(--p)">RM ' + amount.toFixed(2) + '</div></div>';
+
+  // Payment method selection
+  html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-wallet" style="color:var(--p);margin-right:6px"></i>Payment Method</div>';
+  html += '<div id="pgMethods" style="display:grid;gap:8px;margin-bottom:16px">';
+  var methods = [
+    { id: 'fpx', icon: 'fa-university', name: 'FPX Online Banking', desc: 'Pay via Malaysian banks', color: '#00B894' },
+    { id: 'card', icon: 'fa-credit-card', name: 'Credit / Debit Card', desc: 'Visa, Mastercard, AMEX', color: '#6C5CE7' },
+    { id: 'ewallet', icon: 'fa-mobile-alt', name: 'E-Wallet', desc: 'Touch n Go, GrabPay, Boost', color: '#FDCB6E' },
+    { id: 'qr', icon: 'fa-qrcode', name: 'DuitNow QR', desc: 'Scan QR code to pay', color: '#00CEC9' }
+  ];
+  methods.forEach(function(m) {
+    html += '<div id="pgm-' + m.id + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg3);border:2px solid transparent;border-radius:12px;cursor:pointer;transition:.2s" onclick="selectPaymentMethod(\'' + m.id + '\')" onmouseover="this.style.background=\'var(--card)\'" onmouseout="if(!this.classList.contains(\'pg-sel\'))this.style.background=\'var(--bg3)\'">' +
+      '<div style="width:40px;height:40px;border-radius:10px;background:' + m.color + '22;color:' + m.color + ';display:flex;align-items:center;justify-content:center;font-size:16px"><i class="fas ' + m.icon + '"></i></div>' +
+      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + m.name + '</div>' +
+      '<div style="font-size:10px;color:var(--t3)">' + m.desc + '</div></div>' +
+      '<div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--bg2)" id="pgr-' + m.id + '"></div></div>';
+  });
+  html += '</div>';
+
+  // FPX bank selector (hidden by default)
+  html += '<div id="pgFpxBanks" style="display:none;margin-bottom:16px">' +
+    '<div class="form-group"><label>Select Your Bank</label>' +
+    '<select id="pgBankSel"><option value="">-- Select Bank --</option>' +
+    '<option>Maybank2u</option><option>CIMB Clicks</option><option>Public Bank</option>' +
+    '<option>RHB Now</option><option>Hong Leong Connect</option><option>AmOnline</option>' +
+    '<option>Bank Islam</option><option>Bank Rakyat</option><option>BSN</option>' +
+    '<option>OCBC Online</option><option>HSBC Online</option><option>UOB</option></select></div></div>';
+
+  // Card form (hidden by default)
+  html += '<div id="pgCardForm" style="display:none;margin-bottom:16px">' +
+    '<div class="form-group"><label>Card Number</label><input id="pgCardNum" placeholder="4111 1111 1111 1111" maxlength="19"></div>' +
+    '<div class="form-row"><div class="form-group"><label>Expiry</label><input id="pgCardExp" placeholder="MM/YY" maxlength="5"></div>' +
+    '<div class="form-group"><label>CVV</label><input id="pgCardCvv" placeholder="123" maxlength="4" type="password"></div></div>' +
+    '<div class="form-group"><label>Cardholder Name</label><input id="pgCardName" placeholder="Name on card"></div></div>';
+
+  // E-wallet selector (hidden by default)
+  html += '<div id="pgEwalletSel" style="display:none;margin-bottom:16px">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-tng"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDCB3</div><div style="font-size:10px;font-weight:600">Touch n Go</div></div>' +
+    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-grab"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDE97</div><div style="font-size:10px;font-weight:600">GrabPay</div></div>' +
+    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-boost"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDE80</div><div style="font-size:10px;font-weight:600">Boost</div></div></div></div>';
+
+  // QR code (hidden by default)
+  html += '<div id="pgQrDisplay" style="display:none;text-align:center;margin-bottom:16px">' +
+    '<div style="width:180px;height:180px;margin:0 auto;background:var(--bg3);border-radius:14px;display:flex;align-items:center;justify-content:center;border:2px solid var(--p)">' +
+    '<div><i class="fas fa-qrcode" style="font-size:80px;color:var(--p)"></i>' +
+    '<div style="font-size:9px;color:var(--t3);margin-top:6px">Scan with DuitNow</div></div></div>' +
+    '<div style="font-size:10px;color:var(--t3);margin-top:8px">QR code expires in 15 minutes</div></div>';
+
+  // Security badge
+  html += '<div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:14px">' +
+    '<i class="fas fa-shield-alt" style="color:var(--ok);font-size:14px"></i>' +
+    '<div style="font-size:10px;color:var(--t3)">Secured by WeStay Payment Gateway &bull; PCI DSS Compliant &bull; 256-bit SSL</div></div>';
+
+  html += '</div>';
+
+  openModal('<i class="fas fa-lock" style="color:#00B894"></i> Payment Gateway', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-p" id="pgPayBtn" onclick="processGatewayPayment(\'' + billType + '\',\'' + billId + '\')" style="min-width:160px"><i class="fas fa-lock"></i> Pay RM ' + amount.toFixed(2) + '</button>', 'sm');
+}
+
+var _selectedPaymentMethod = '';
+function selectPaymentMethod(method) {
+  _selectedPaymentMethod = method;
+  // Reset all method borders
+  var allM = document.querySelectorAll('[id^="pgm-"]');
+  allM.forEach(function(el) { el.style.borderColor = 'transparent'; el.style.background = 'var(--bg3)'; el.classList.remove('pg-sel'); });
+  var allR = document.querySelectorAll('[id^="pgr-"]');
+  allR.forEach(function(el) { el.style.background = 'transparent'; el.style.borderColor = 'var(--bg2)'; });
+  // Highlight selected
+  var sel = document.getElementById('pgm-' + method);
+  if (sel) { sel.style.borderColor = 'var(--p)'; sel.style.background = 'var(--card)'; sel.classList.add('pg-sel'); }
+  var radio = document.getElementById('pgr-' + method);
+  if (radio) { radio.style.background = 'var(--p)'; radio.style.borderColor = 'var(--p)'; }
+  // Toggle sub-forms
+  ['pgFpxBanks','pgCardForm','pgEwalletSel','pgQrDisplay'].forEach(function(id) { var el = document.getElementById(id); if(el) el.style.display = 'none'; });
+  var showMap = { fpx: 'pgFpxBanks', card: 'pgCardForm', ewallet: 'pgEwalletSel', qr: 'pgQrDisplay' };
+  var show = document.getElementById(showMap[method]);
+  if (show) show.style.display = 'block';
+}
+
+function processGatewayPayment(billType, billId) {
+  if (!_selectedPaymentMethod) { toast('Please select a payment method', 'error'); return; }
+
+  // Validate based on method
+  if (_selectedPaymentMethod === 'fpx') {
+    var bank = document.getElementById('pgBankSel');
+    if (bank && !bank.value) { toast('Please select your bank', 'error'); return; }
+  }
+  if (_selectedPaymentMethod === 'card') {
+    var num = document.getElementById('pgCardNum');
+    var cvv = document.getElementById('pgCardCvv');
+    if (num && num.value.replace(/\s/g,'').length < 13) { toast('Please enter a valid card number', 'error'); return; }
+    if (cvv && cvv.value.length < 3) { toast('Please enter CVV', 'error'); return; }
+  }
+
+  // Show processing state
+  var btn = document.getElementById('pgPayBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    btn.style.opacity = '0.7';
+  }
+
+  // Simulate payment processing (1.5 second delay)
+  setTimeout(function() {
+    if (billType === 'rent') {
+      var bill = BILLS.find(function(b) { return b.id === billId; });
+      if (bill) {
+        bill.s = 'Paid';
+        // Also trigger auto-reconnect if applicable
+        if (typeof payBillWithAutoReconnect === 'function') {
+          payBillWithAutoReconnect(billId);
+        }
+      }
+    } else {
+      var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+      if (ubill) ubill.status = 'Paid';
+    }
+    saveData();
+    closeModal();
+
+    // Show success receipt
+    var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'E-Wallet', qr: 'DuitNow QR' };
+    var receiptHtml = '<div style="text-align:center;padding:20px">' +
+      '<div style="width:64px;height:64px;border-radius:50%;background:#00B89422;color:#00B894;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px"><i class="fas fa-check"></i></div>' +
+      '<h3 style="color:#00B894;margin-bottom:4px">Payment Successful!</h3>' +
+      '<div style="font-size:11px;color:var(--t3);margin-bottom:18px">Transaction completed via ' + (methodNames[_selectedPaymentMethod] || 'Online') + '</div>' +
+      '<div class="dep-card">' +
+      depRow('Bill ID', billId) +
+      depRow('Amount', 'RM ' + (billType === 'rent' ? (parseInt((BILLS.find(function(b){return b.id===billId;})||{a:'0'}).a.replace(/[^\d]/g,''))||0).toFixed(2) : ((UTILITY_BILLS.find(function(b){return b.id===billId;})||{total:0}).total).toFixed(2))) +
+      depRow('Method', methodNames[_selectedPaymentMethod] || 'Online') +
+      depRow('Date', new Date().toLocaleDateString('en-MY')) +
+      depRow('Time', new Date().toLocaleTimeString('en-MY')) +
+      depRowHtml('Status', '<span class="bs b-ok">Paid</span>') +
+      depRow('Ref No.', 'WS-' + Date.now().toString(36).toUpperCase()) +
+      '</div></div>';
+
+    setTimeout(function() {
+      openModal('<i class="fas fa-receipt" style="color:#00B894"></i> Payment Receipt', receiptHtml,
+        '<button class="btn btn-ghost" onclick="closeModal();navigateTo(\'my-bills\')">Done</button>' +
+        '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print Receipt</button>', 'sm');
+    }, 200);
+
+    toast('Payment successful!', 'success');
+    pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[_selectedPaymentMethod] || 'Online'));
+    _selectedPaymentMethod = '';
+  }, 1500);
+}
+
+// Pay All Outstanding Bills at once
+function tenantPayAllBills() {
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var unpaidRent = BILLS.filter(function(b) { return b.t === tenant && b.s !== 'Paid'; });
+  var unpaidUtil = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant && b.status !== 'Paid'; }) : [];
+  var totalAmt = 0;
+  unpaidRent.forEach(function(b) { totalAmt += parseInt(b.a.replace(/[^\d]/g, '')) || 0; });
+  unpaidUtil.forEach(function(b) { totalAmt += b.total; });
+
+  if (totalAmt === 0) { toast('No outstanding bills!', 'info'); return; }
+
+  var count = unpaidRent.length + unpaidUtil.length;
+  confirmDialog('Pay All Bills?', 'Process payment for all ' + count + ' outstanding bill(s) totaling RM ' + totalAmt.toFixed(2) + '? This will open the payment gateway.', function() {
+    // Open gateway for the total
+    var html = '<div style="max-width:420px;margin:0 auto">';
+    html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00B894);padding:22px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+      '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDD12</div>' +
+      '<h3 style="color:#fff;font-size:15px;margin-bottom:2px">BULK PAYMENT</h3>' +
+      '<div style="color:rgba(255,255,255,.7);font-size:11px">Pay all outstanding bills at once</div></div>';
+
+    html += '<div style="text-align:center;padding:18px;background:var(--bg3);border-radius:14px;margin-bottom:16px">' +
+      '<div style="font-size:10px;color:var(--t3);margin-bottom:4px">' + count + ' bill(s)</div>' +
+      '<div style="font-size:32px;font-weight:800;color:var(--p)">RM ' + totalAmt.toFixed(2) + '</div></div>';
+
+    // List bills being paid
+    html += '<div style="margin-bottom:14px;max-height:150px;overflow-y:auto">';
+    unpaidRent.forEach(function(b) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;font-size:11px">' +
+        '<i class="fas fa-home" style="color:#6C5CE7"></i><span style="flex:1">' + escHtml(b.id) + ' — Rent</span><span style="font-weight:600">' + escHtml(b.a) + '</span></div>';
+    });
+    unpaidUtil.forEach(function(b) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px;font-size:11px">' +
+        '<i class="fas fa-bolt" style="color:#FDCB6E"></i><span style="flex:1">' + escHtml(b.id) + ' — Utility</span><span style="font-weight:600">RM ' + b.total.toFixed(2) + '</span></div>';
+    });
+    html += '</div>';
+
+    // Payment method (simplified — FPX only for bulk)
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-wallet" style="color:var(--p);margin-right:6px"></i>Payment Method</div>';
+    html += '<div class="form-group"><select id="pgBulkMethod">' +
+      '<option value="fpx">FPX Online Banking</option>' +
+      '<option value="card">Credit / Debit Card</option>' +
+      '<option value="ewallet">E-Wallet (TnG / GrabPay / Boost)</option></select></div>';
+
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg3);border-radius:10px">' +
+      '<i class="fas fa-shield-alt" style="color:var(--ok);font-size:14px"></i>' +
+      '<div style="font-size:10px;color:var(--t3)">Secured by WeStay Payment Gateway &bull; PCI DSS Compliant</div></div>';
+    html += '</div>';
+
+    closeModal();
+    setTimeout(function() {
+      openModal('<i class="fas fa-lock" style="color:#00B894"></i> Pay All Bills', html,
+        '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-p" id="pgBulkPayBtn" onclick="processBulkPayment()"><i class="fas fa-lock"></i> Pay RM ' + totalAmt.toFixed(2) + '</button>', 'sm');
+    }, 200);
+  }, 'success');
+}
+
+function processBulkPayment() {
+  var btn = document.getElementById('pgBulkPayBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; btn.style.opacity = '0.7'; }
+
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+
+  setTimeout(function() {
+    var count = 0;
+    BILLS.forEach(function(b) { if (b.t === tenant && b.s !== 'Paid') { b.s = 'Paid'; count++; } });
+    if (typeof UTILITY_BILLS !== 'undefined') {
+      UTILITY_BILLS.forEach(function(b) { if (b.tenant === tenant && b.status !== 'Paid') { b.status = 'Paid'; count++; } });
+    }
+    saveData();
+    closeModal();
+    toast(count + ' bill(s) paid successfully!', 'success');
+    pushNotif('fa-credit-card', '#00B894', 'Bulk Payment', count + ' bills paid');
+    navigateTo('my-bills');
+  }, 1500);
+}
+
+// Preview My Bills Report
+function previewMyBillsReport() {
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var myRentBills = BILLS.filter(function(b) { return b.t === tenant; });
+  var myUtilBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant; }) : [];
+  var now = new Date();
+  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  var totalRent = 0, totalUtil = 0, totalPaid = 0;
+  myRentBills.forEach(function(b) { var amt = parseInt(b.a.replace(/[^\d]/g,''))||0; totalRent += amt; if(b.s==='Paid') totalPaid += amt; });
+  myUtilBills.forEach(function(b) { totalUtil += b.total; if(b.status==='Paid') totalPaid += b.total; });
+
+  var html = '<div style="max-width:650px;margin:0 auto">';
+  // Header
+  html += '<div style="background:linear-gradient(135deg,#6C5CE7,#74B9FF);padding:24px;border-radius:16px;text-align:center;margin-bottom:18px">' +
+    '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDCCB</div>' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:2px">TENANT BILLING STATEMENT</h3>' +
+    '<div style="color:rgba(255,255,255,.7);font-size:12px">' + escHtml(tenant) + ' &bull; ' + monthNames[now.getMonth()] + ' ' + now.getFullYear() + '</div></div>';
+
+  // Summary
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#6C5CE7">RM ' + totalRent + '</div><div style="font-size:10px;color:var(--t3)">Total Rent</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#FDCB6E">RM ' + totalUtil.toFixed(2) + '</div><div style="font-size:10px;color:var(--t3)">Total Utility</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#00B894">RM ' + totalPaid.toFixed(2) + '</div><div style="font-size:10px;color:var(--t3)">Paid</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:12px"><div style="font-size:18px;font-weight:800;color:#E17055">RM ' + (totalRent + totalUtil - totalPaid).toFixed(2) + '</div><div style="font-size:10px;color:var(--t3)">Outstanding</div></div></div>';
+
+  // Rent bills table
+  if (myRentBills.length) {
+    html += '<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-home" style="color:#6C5CE7;margin-right:6px"></i>Rental Invoices</div>';
+    html += '<table><thead><tr><th>Invoice</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+    myRentBills.forEach(function(b) {
+      var cls = b.s === 'Paid' ? 'b-ok' : b.s === 'Pending' ? 'b-warn' : 'b-err';
+      html += '<tr><td style="font-weight:600">' + escHtml(b.id) + '</td><td>' + escHtml(b.a) + '</td><td><span class="bs ' + cls + '">' + escHtml(b.s) + '</span></td><td>' + escHtml(b.d) + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Utility bills table
+  if (myUtilBills.length) {
+    html += '<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-bolt" style="color:#FDCB6E;margin-right:6px"></i>Utility Bills</div>';
+    html += '<table><thead><tr><th>Bill ID</th><th>Period</th><th>Electricity</th><th>Water</th><th>Internet</th><th>Sewerage</th><th>Total</th><th>Status</th></tr></thead><tbody>';
+    myUtilBills.forEach(function(b) {
+      var cls = b.status === 'Paid' ? 'b-ok' : 'b-warn';
+      var getAmt = function(type) { var item = b.items.find(function(i){return i.type===type;}); return item ? 'RM ' + item.amount.toFixed(2) : '-'; };
+      html += '<tr><td style="font-weight:600">' + escHtml(b.id) + '</td><td>' + escHtml(b.period) + '</td>' +
+        '<td>' + getAmt('Electricity') + '</td><td>' + getAmt('Water') + '</td>' +
+        '<td>' + getAmt('Internet') + '</td><td>' + getAmt('Sewerage') + '</td>' +
+        '<td style="font-weight:600">RM ' + b.total.toFixed(2) + '</td><td><span class="bs ' + cls + '">' + escHtml(b.status) + '</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Grand total
+  html += '<div style="padding:14px;background:var(--bg3);border-radius:12px;border-left:3px solid var(--p)">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center">' +
+    '<div style="font-size:13px;font-weight:700">Grand Total</div>' +
+    '<div style="font-size:20px;font-weight:800;color:var(--p)">RM ' + (totalRent + totalUtil).toFixed(2) + '</div></div></div>';
+
+  html += '<div style="text-align:center;padding:12px;font-size:10px;color:var(--t3);margin-top:12px">Generated by WeStay &bull; ' + now.toLocaleDateString('en-MY') + '</div></div>';
+
+  openModal('<i class="fas fa-file-alt" style="color:#6C5CE7"></i> Billing Statement — ' + escHtml(tenant), html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+    '<button class="btn btn-p" onclick="exportMyBillsCSV()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print / PDF</button>', 'lg');
+}
+
+// Export tenant's combined bills as CSV
+function exportMyBillsCSV() {
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var headers = ['Bill ID','Type','Amount (RM)','Status','Date/Period','Details'];
+  var rows = [];
+  BILLS.filter(function(b){return b.t===tenant;}).forEach(function(b) {
+    rows.push([b.id, 'Rent', b.a, b.s, b.d, b.prop || '']);
+  });
+  if (typeof UTILITY_BILLS !== 'undefined') {
+    UTILITY_BILLS.filter(function(b){return b.tenant===tenant;}).forEach(function(b) {
+      var details = b.items.map(function(i){return i.type+': RM '+i.amount.toFixed(2);}).join('; ');
+      rows.push([b.id, 'Utility', 'RM ' + b.total.toFixed(2), b.status, b.period, details]);
+    });
+  }
+  exportCSV(headers, rows, 'my-bills-' + tenant.replace(/\s+/g,'-').toLowerCase() + '-' + new Date().toISOString().slice(0,7) + '.csv');
+  toast('Bills exported to CSV', 'success');
+}
+
+// Tenant view of their utility bills — shows ALL months, paid & unpaid
 function tenantViewUtilityBills() {
-  const tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
-  const myBills = UTILITY_BILLS.filter(b => b.tenant === tenant);
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var myBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant; }) : [];
 
   if (!myBills.length) {
     toast('No utility bills found. Bills are generated by your property manager.', 'info');
     return;
   }
 
-  let html = '';
-  myBills.forEach(bill => {
-    html += '<div style="background:var(--bg3);border-radius:14px;padding:16px;margin-bottom:12px">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
-      '<div><div style="font-size:13px;font-weight:600">' + escHtml(bill.id) + '</div>' +
-      '<div style="font-size:10px;color:var(--t3)">' + escHtml(bill.period) + '</div></div>' +
-      '<div style="text-align:right"><div style="font-size:16px;font-weight:700;color:var(--p)">RM ' + bill.total.toFixed(2) + '</div>' +
-      '<span class="bs ' + (bill.status === 'Paid' ? 'b-ok' : 'b-warn') + '">' + escHtml(bill.status) + '</span></div></div>';
+  // Sort by date descending (newest first)
+  var sorted = myBills.slice().sort(function(a, b) {
+    return (b.date || '').localeCompare(a.date || '');
+  });
 
-    // Mini breakdown
+  // Summary stats
+  var totalBills = sorted.length;
+  var paidBills = sorted.filter(function(b) { return b.status === 'Paid'; });
+  var unpaidBills = sorted.filter(function(b) { return b.status !== 'Paid'; });
+  var totalAmount = sorted.reduce(function(s, b) { return s + b.total; }, 0);
+  var totalPaid = paidBills.reduce(function(s, b) { return s + b.total; }, 0);
+  var totalUnpaid = unpaidBills.reduce(function(s, b) { return s + b.total; }, 0);
+
+  var html = '';
+
+  // Summary header
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:10px"><div style="font-size:18px;font-weight:700;color:var(--p)">' + totalBills + '</div><div style="font-size:10px;color:var(--t3)">All Bills</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:10px"><div style="font-size:18px;font-weight:700;color:var(--ok)">' + paidBills.length + '</div><div style="font-size:10px;color:var(--t3)">Paid</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:10px"><div style="font-size:18px;font-weight:700;color:var(--warn)">' + unpaidBills.length + '</div><div style="font-size:10px;color:var(--t3)">Unpaid</div></div>' +
+    '<div style="text-align:center;padding:12px;background:var(--bg3);border-radius:10px"><div style="font-size:18px;font-weight:700;color:var(--p)">RM ' + totalAmount.toFixed(2) + '</div><div style="font-size:10px;color:var(--t3)">Total</div></div></div>';
+
+  // Filter tabs
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px">' +
+    '<button class="btn-s" style="background:var(--p);color:#fff" onclick="filterUtilBills(\'all\')">All (' + totalBills + ')</button>' +
+    '<button class="btn-s" onclick="filterUtilBills(\'unpaid\')" id="ubFilterUnpaid">Unpaid (' + unpaidBills.length + ')</button>' +
+    '<button class="btn-s" onclick="filterUtilBills(\'paid\')" id="ubFilterPaid">Paid (' + paidBills.length + ')</button></div>';
+
+  // Bill cards — all months
+  html += '<div id="ubCardList">';
+  sorted.forEach(function(bill) {
+    var isPaid = bill.status === 'Paid';
+    var borderColor = isPaid ? '#00B894' : '#FDCB6E';
+    html += '<div class="ub-card" data-status="' + (isPaid ? 'paid' : 'unpaid') + '" style="background:var(--bg3);border-radius:14px;padding:16px;margin-bottom:12px;border-left:3px solid ' + borderColor + '">';
+
+    // Bill header row
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div style="width:36px;height:36px;border-radius:10px;background:' + borderColor + '22;color:' + borderColor + ';display:flex;align-items:center;justify-content:center;font-size:14px"><i class="fas ' + (isPaid ? 'fa-check-circle' : 'fa-clock') + '"></i></div>' +
+      '<div><div style="font-size:13px;font-weight:700">' + escHtml(bill.period) + '</div>' +
+      '<div style="font-size:10px;color:var(--t3)">' + escHtml(bill.id) + ' &bull; ' + escHtml(bill.date) + '</div></div></div>' +
+      '<div style="text-align:right"><div style="font-size:18px;font-weight:800;color:var(--p)">RM ' + bill.total.toFixed(2) + '</div>' +
+      '<span class="bs ' + (isPaid ? 'b-ok' : 'b-warn') + '" style="font-size:9px">' + escHtml(bill.status) + '</span></div></div>';
+
+    // Charge breakdown grid
     html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">';
-    bill.items.forEach(item => {
+    bill.items.forEach(function(item) {
       var ic = item.type === 'Electricity' ? 'fa-bolt' : item.type === 'Water' ? 'fa-tint' : item.type === 'Internet' ? 'fa-wifi' : 'fa-shower';
       var col = item.type === 'Electricity' ? '#FDCB6E' : item.type === 'Water' ? '#74B9FF' : item.type === 'Internet' ? '#6C5CE7' : '#A29BFE';
       html += '<div style="padding:8px;background:var(--bg2);border-radius:8px;text-align:center">' +
         '<i class="fas ' + ic + '" style="color:' + col + ';font-size:12px;display:block;margin-bottom:4px"></i>' +
-        '<div style="font-size:9px;color:var(--t3)">' + item.type + '</div>' +
-        '<div style="font-size:11px;font-weight:600">RM ' + item.amount.toFixed(2) + '</div></div>';
+        '<div style="font-size:9px;color:var(--t3)">' + escHtml(item.type) + '</div>' +
+        '<div style="font-size:11px;font-weight:600">RM ' + item.amount.toFixed(2) + '</div>';
+      if (item.usage && item.unit && item.unit !== 'month') {
+        html += '<div style="font-size:8px;color:var(--t3)">' + item.usage + ' ' + escHtml(item.unit) + '</div>';
+      }
+      html += '</div>';
     });
     html += '</div>';
 
-    if (bill.status !== 'Paid') {
-      html += '<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="payUtilityBill(\'' + bill.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>';
-    }
+    // View detail button (no payment gateway here)
+    html += '<div style="margin-top:10px;text-align:right"><button class="btn-s" onclick="showUtilityBillDetail(\'' + bill.id + '\')"><i class="fas fa-eye"></i> View Details</button></div>';
+
     html += '</div>';
   });
+  html += '</div>';
 
-  openModal('<i class="fas fa-bolt" style="color:#74B9FF"></i> My Utility Bills', html, '<button class="btn btn-ghost" onclick="closeModal()">Close</button>', 'sm');
+  // Rate reference footer
+  html += '<div style="padding:10px;background:var(--bg3);border-radius:10px;font-size:10px;color:var(--t3);margin-top:8px">' +
+    '<strong>Rate Reference:</strong> Electric: RM ' + UTILITY_RATES.electric.rate + '/kWh &bull; ' +
+    'Water: RM ' + UTILITY_RATES.water.rate + '/m\u00B3 &bull; ' +
+    'Internet: RM ' + UTILITY_RATES.internet.rate + '/month &bull; ' +
+    'Sewerage: RM ' + UTILITY_RATES.sewerage.rate + '/month</div>';
+
+  openModal('<i class="fas fa-bolt" style="color:#74B9FF"></i> My Utility Bills — All Months', html,
+    '<button class="btn btn-ghost" onclick="closeModal()">Close</button>', 'lg');
 }
 
-function showUtilityBillDetail(billId) {
-  var bill = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.find(function(b) { return b.id === billId; }) : null;
-  if (!bill) { toast('Bill not found', 'error'); return; }
-
-  var cls = bill.status === 'Paid' ? 'b-ok' : 'b-warn';
-  var html = '<div style="text-align:center;margin-bottom:16px">' +
-    '<div style="font-size:32px;font-weight:800;color:var(--p)">RM ' + bill.total.toFixed(2) + '</div>' +
-    '<span class="bs ' + cls + '">' + escHtml(bill.status) + '</span></div>';
-
-  html += '<div class="dep-card">' +
-    depRow('Bill ID', bill.id) +
-    depRow('Tenant', bill.tenant) +
-    depRow('Period', bill.period) +
-    depRow('Total', 'RM ' + bill.total.toFixed(2)) +
-    '</div>';
-
-  // Item breakdown
-  html += '<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;margin-bottom:8px"><i class="fas fa-list" style="color:var(--p);margin-right:6px"></i>Breakdown</div>';
-  html += '<div style="display:grid;gap:8px">';
-  bill.items.forEach(function(item) {
-    var ic = item.type === 'Electricity' ? 'fa-bolt' : item.type === 'Water' ? 'fa-tint' : item.type === 'Internet' ? 'fa-wifi' : 'fa-shower';
-    var col = item.type === 'Electricity' ? '#FDCB6E' : item.type === 'Water' ? '#74B9FF' : item.type === 'Internet' ? '#6C5CE7' : '#A29BFE';
-    html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:10px">' +
-      '<div style="width:34px;height:34px;border-radius:9px;background:' + col + '22;color:' + col + ';display:flex;align-items:center;justify-content:center;font-size:14px"><i class="fas ' + ic + '"></i></div>' +
-      '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + escHtml(item.type) + '</div>' +
-      '<div style="font-size:10px;color:var(--t3)">' + (item.usage || '') + '</div></div>' +
-      '<div style="font-size:14px;font-weight:700;color:var(--p)">RM ' + item.amount.toFixed(2) + '</div></div>';
+// Filter utility bill cards by status
+function filterUtilBills(filter) {
+  var cards = document.querySelectorAll('.ub-card');
+  cards.forEach(function(card) {
+    if (filter === 'all') { card.style.display = ''; }
+    else { card.style.display = card.getAttribute('data-status') === filter ? '' : 'none'; }
   });
-  html += '</div></div>';
-
-  var footer = '<button class="btn btn-ghost" onclick="closeModal()">Close</button>';
-  if (bill.status !== 'Paid') {
-    footer += '<button class="btn btn-p" onclick="closeModal();payUtilityBill(\'' + bill.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>';
-  }
-  openModal('<i class="fas fa-file-invoice" style="color:#74B9FF"></i> Utility Bill Details', html, footer, 'sm');
 }
 
 

@@ -51,39 +51,84 @@ function tenantMyUnit() {
 }
 
 function tenantMyBills() {
-  const myBills = BILLS.filter(b => b.t === 'Sarah Lim');
-  // Also get utility bills for this tenant
-  const myUtilBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(b => b.tenant === 'Sarah Lim') : [];
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var myRentBills = BILLS.filter(function(b) { return b.t === tenant; });
+  var myUtilBills = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant; }) : [];
 
-  let rows = '';
-  myBills.forEach(b => {
-    const cls = b.s === 'Paid' ? 'b-ok' : b.s === 'Pending' ? 'b-warn' : 'b-err';
-    rows += '<tr style="cursor:pointer" onclick="showBillDetail(\'' + b.id + '\')">' +
-      '<td style="font-weight:600">' + escHtml(b.id) + '</td><td>' + escHtml(b.a) + '</td>' +
+  // Unified summary stats
+  var totalRentDue = 0, totalUtilDue = 0, totalPaid = 0, totalUnpaid = 0;
+  myRentBills.forEach(function(b) {
+    var amt = parseInt(b.a.replace(/[^\d]/g, '')) || 0;
+    if (b.s === 'Paid') totalPaid += amt; else totalUnpaid += amt;
+    if (b.s !== 'Paid') totalRentDue += amt;
+  });
+  myUtilBills.forEach(function(b) {
+    if (b.status === 'Paid') totalPaid += Math.round(b.total); else totalUnpaid += Math.round(b.total);
+    if (b.status !== 'Paid') totalUtilDue += Math.round(b.total);
+  });
+  var totalDue = totalRentDue + totalUtilDue;
+  var totalBills = myRentBills.length + myUtilBills.length;
+  var unpaidCount = myRentBills.filter(function(b){return b.s !== 'Paid';}).length + myUtilBills.filter(function(b){return b.status !== 'Paid';}).length;
+
+  // Header with action buttons
+  var html = '<div class="pg-h pg-row"><div><h1>My Bills</h1><p>All rental &amp; utility invoices in one place</p></div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button class="btn-s" onclick="previewMyBillsReport()"><i class="fas fa-eye"></i> Preview</button>' +
+    '<button class="btn-s" onclick="exportMyBillsCSV()"><i class="fas fa-download"></i> Export</button>' +
+    '</div></div>';
+
+  // Summary stat cards
+  html += '<div class="stats">' +
+    cStat('fa-file-invoice','#6C5CE7', totalBills, 'Total Bills','','','') +
+    cStat('fa-exclamation-circle','#E17055', unpaidCount, 'Unpaid','','','') +
+    cStat('fa-money-bill-wave','#FDCB6E','RM ' + totalDue, 'Total Due','','','') +
+    cStat('fa-check-circle','#00B894','RM ' + totalPaid, 'Total Paid','','','') +
+    '</div>';
+
+  // Outstanding bills alert + Pay All button
+  if (totalDue > 0) {
+    html += '<div style="background:linear-gradient(135deg,#6C5CE722,#E1705522);border:1px solid #E1705544;border-radius:14px;padding:16px;margin-bottom:16px;display:flex;align-items:center;gap:14px">' +
+      '<div style="width:48px;height:48px;border-radius:12px;background:#E1705522;color:#E17055;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="fas fa-exclamation-triangle"></i></div>' +
+      '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#E17055">Outstanding Balance: RM ' + totalDue + '</div>' +
+      '<div style="font-size:11px;color:var(--t2)">' + unpaidCount + ' unpaid bill(s) — Rent: RM ' + totalRentDue + ' | Utilities: RM ' + totalUtilDue + '</div></div>' +
+      '<button class="btn btn-p" style="flex-shrink:0;font-size:12px" onclick="tenantPayAllBills()"><i class="fas fa-credit-card"></i> Pay All (RM ' + totalDue + ')</button></div>';
+  }
+
+  // Rent bills table
+  var rentRows = '';
+  myRentBills.forEach(function(b) {
+    var cls = b.s === 'Paid' ? 'b-ok' : b.s === 'Pending' ? 'b-warn' : 'b-err';
+    rentRows += '<tr style="cursor:pointer" onclick="showBillDetail(\'' + b.id + '\')">' +
+      '<td><i class="fas fa-home" style="color:#6C5CE7;margin-right:6px;font-size:10px"></i><span style="font-weight:600">' + escHtml(b.id) + '</span></td>' +
+      '<td>Rent</td><td style="font-weight:600">' + escHtml(b.a) + '</td>' +
       '<td><span class="bs ' + cls + '">' + escHtml(b.s) + '</span></td><td>' + escHtml(b.d) + '</td>' +
-      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay Now</button>' : '<button class="btn-s" onclick="event.stopPropagation();showBillDetail(\'' + b.id + '\')"><i class="fas fa-eye"></i></button>') + '</td></tr>';
+      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();tenantPayWithGateway(\'rent\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
   });
 
-  // Utility bills section
-  let utilRows = '';
-  myUtilBills.forEach(b => {
-    const cls = b.status === 'Paid' ? 'b-ok' : 'b-warn';
+  // Utility bills rows
+  var utilRows = '';
+  myUtilBills.forEach(function(b) {
+    var cls = b.status === 'Paid' ? 'b-ok' : 'b-warn';
     utilRows += '<tr style="cursor:pointer" onclick="showUtilityBillDetail(\'' + b.id + '\')">' +
-      '<td style="font-weight:600">' + escHtml(b.id) + '</td>' +
-      '<td>' + escHtml(b.period) + '</td>' +
-      '<td style="font-weight:600;color:var(--p)">RM ' + b.total.toFixed(2) + '</td>' +
-      '<td><span class="bs ' + cls + '">' + escHtml(b.status) + '</span></td>' +
-      '<td>' + (b.status !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payUtilityBill(\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<button class="btn-s" onclick="event.stopPropagation();showUtilityBillDetail(\'' + b.id + '\')"><i class="fas fa-eye"></i></button>') + '</td></tr>';
+      '<td><i class="fas fa-bolt" style="color:#FDCB6E;margin-right:6px;font-size:10px"></i><span style="font-weight:600">' + escHtml(b.id) + '</span></td>' +
+      '<td>Utility</td><td style="font-weight:600;color:var(--p)">RM ' + b.total.toFixed(2) + '</td>' +
+      '<td><span class="bs ' + cls + '">' + escHtml(b.status) + '</span></td><td>' + escHtml(b.period) + '</td>' +
+      '<td>' + (b.status !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();tenantPayWithGateway(\'utility\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
   });
 
-  return '<div class="pg-h"><h1>My Bills</h1><p>View and pay your invoices</p></div>' +
-    '<div class="panel"><div class="panel-h"><h3>Rent & Invoices</h3></div>' +
-    '<table><thead><tr><th>Invoice</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>' +
-    '<tbody>' + rows + '</tbody></table></div>' +
-    (utilRows ? '<div class="panel" style="margin-top:14px"><div class="panel-h"><h3>Utility Bills</h3>' +
-    '<button class="btn-s" onclick="tenantViewUtilityBills()"><i class="fas fa-bolt"></i> View All</button></div>' +
-    '<table><thead><tr><th>Bill ID</th><th>Period</th><th>Total</th><th>Status</th><th></th></tr></thead>' +
-    '<tbody>' + utilRows + '</tbody></table></div>' : '');
+  // Combined table
+  var allRows = rentRows + utilRows;
+  html += '<div class="panel"><div class="panel-h"><h3>All Bills</h3>' +
+    '<div style="font-size:10px;color:var(--t3)">' + totalBills + ' bill(s) &bull; Rent + Utilities</div></div>';
+  if (allRows) {
+    html += '<table><thead><tr><th>Invoice</th><th>Type</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>' +
+      '<tbody>' + allRows + '</tbody></table>';
+  } else {
+    html += '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No bills found. You\'re all clear!</p></div>';
+  }
+  html += '</div>';
+
+  return html;
 }
 
 function tenantMyContract() {
