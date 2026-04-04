@@ -155,8 +155,8 @@ const PAGE_MAP = {
       return;
     }
 
-    // Backend unavailable (result === null) — try demo mode fallback
-    if (result === null) {
+    // Backend unavailable or login failed — try demo mode fallback
+    if (!result || !result.token) {
       const demo = DEMO_ACCOUNTS[username];
       if (demo && demo.password === password) {
         const demoUser = { id: 'demo-' + username, username: username, role: demo.role, name: demo.name, email: demo.email };
@@ -204,6 +204,9 @@ function loginAs(role) {
 
   // Navigate to dashboard
   navigateTo('dashboard');
+
+  // Handle Stripe payment return URL
+  _handlePaymentReturn();
 }
 
 function buildSidebar(cfg) {
@@ -379,6 +382,65 @@ function renderFeed() {
   const el = document.getElementById('feedList');
   if (!el) return;
   el.innerHTML = feedHtml();
+}
+
+// ---- STRIPE PAYMENT RETURN HANDLER ----
+function _handlePaymentReturn() {
+  var params = new URLSearchParams(window.location.search);
+  var billId = params.get('payment_success');
+  var sessionId = params.get('session_id');
+  var cancelled = params.get('payment_cancelled');
+
+  // Clean URL (remove query params without reload)
+  if (billId || cancelled) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  if (cancelled) {
+    toast('Payment cancelled for ' + cancelled, 'info');
+    return;
+  }
+
+  if (billId) {
+    // Verify payment with backend if possible
+    if (_useAPI && sessionId) {
+      apiFetch('/payments/verify-session/' + sessionId).then(function(result) {
+        if (result && result.paid) {
+          // Update local state
+          _updateLocalBillStatus(result.billId, result.billType);
+          var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', grabpay: 'GrabPay' };
+          showPaymentReceipt(result.billType || 'rent', result.billId, result.paymentMethod || 'card', methodNames);
+          toast('Payment confirmed! Bill ' + result.billId + ' is now paid.', 'success');
+          pushNotif('fa-check-circle', '#00B894', 'Payment Successful', result.billId + ' paid via Stripe');
+        } else if (result && !result.paid) {
+          toast('Payment is still processing. We\'ll update you when confirmed.', 'info');
+        } else {
+          // Verification failed but payment might still be OK (webhook will handle)
+          toast('Payment submitted for ' + billId + '. Verifying...', 'info');
+          _updateLocalBillStatus(billId, 'rent');
+        }
+      });
+    } else {
+      // No backend or no session ID — optimistically mark as paid
+      _updateLocalBillStatus(billId, 'rent');
+      toast('Payment completed for ' + billId + '!', 'success');
+      pushNotif('fa-check-circle', '#00B894', 'Payment Successful', billId + ' paid');
+    }
+  }
+}
+
+function _updateLocalBillStatus(billId, billType) {
+  if (billType === 'utility') {
+    var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+    if (ubill) ubill.status = 'Paid';
+  } else {
+    var bill = BILLS.find(function(b) { return b.id === billId; });
+    if (bill) {
+      bill.s = 'Paid';
+      if (typeof payBillWithAutoReconnect === 'function') payBillWithAutoReconnect(billId);
+    }
+  }
+  saveData();
 }
 
 // ---- LOGOUT ----

@@ -1,5 +1,5 @@
 // ============ PAYMENT ROUTES ============
-// Stripe payment gateway integration for bill payments
+// Stripe Checkout Session integration for bill payments
 // Routes: /api/payments/*
 
 const express = require('express');
@@ -20,7 +20,76 @@ module.exports = function(db) {
     });
   });
 
-  // POST /api/payments/create-intent — Create payment intent for a bill
+  // POST /api/payments/checkout — Create Stripe Checkout Session (redirect to Stripe-hosted page)
+  router.post('/checkout', async (req, res) => {
+    try {
+      if (!payment.isConfigured()) {
+        return res.status(503).json({
+          error: 'Payment gateway not configured',
+          hint: 'Set STRIPE_SECRET_KEY in .env to enable payments'
+        });
+      }
+
+      const { billId, billType, paymentMethod } = req.body;
+      if (!billId) return res.status(400).json({ error: 'billId is required' });
+
+      // Look up the bill from the appropriate table
+      let bill, amountCents, tenantName, propertyName;
+      if (billType === 'utility') {
+        bill = await db.getById('utility_bills', billId);
+        if (!bill) return res.status(404).json({ error: 'Utility bill not found' });
+        if (bill.status === 'Paid') return res.status(400).json({ error: 'Bill already paid' });
+        amountCents = payment.parseAmountToCents(bill.total);
+        tenantName = bill.tenant || '';
+        propertyName = bill.property || '';
+      } else {
+        bill = await db.getById('bills', billId);
+        if (!bill) return res.status(404).json({ error: 'Bill not found' });
+        if (bill.s === 'Paid') return res.status(400).json({ error: 'Bill already paid' });
+        amountCents = payment.parseAmountToCents(bill.a);
+        tenantName = bill.t || '';
+        propertyName = bill.prop || '';
+      }
+
+      // Build success/cancel URLs
+      const origin = req.headers.origin || req.headers.referer || 'http://localhost:' + (process.env.PORT || 3456);
+      const baseUrl = origin.replace(/\/$/, '');
+      const successUrl = baseUrl + '/?payment_success=' + encodeURIComponent(billId) + '&session_id={CHECKOUT_SESSION_ID}';
+      const cancelUrl = baseUrl + '/?payment_cancelled=' + encodeURIComponent(billId);
+
+      // Map ewallet → grabpay for Stripe
+      let stripeMethod = paymentMethod || 'auto';
+      if (stripeMethod === 'ewallet') stripeMethod = 'grabpay';
+
+      const result = await payment.createCheckoutSession({
+        amount: amountCents,
+        currency: 'myr',
+        billId: bill.id || billId,
+        billType: billType || 'rent',
+        tenantName,
+        propertyName,
+        paymentMethod: stripeMethod,
+        successUrl,
+        cancelUrl
+      });
+
+      // Audit log
+      createAuditEntry(db, {
+        action: 'create',
+        entity: 'checkout_session',
+        entityId: result.sessionId,
+        user: req.user,
+        ip: req.ip,
+        details: { billId, billType, amount: amountCents, currency: 'myr', method: stripeMethod }
+      });
+
+      res.json(result);
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/payments/create-intent — Create payment intent (legacy, kept for card confirm flow)
   router.post('/create-intent', async (req, res) => {
     try {
       if (!payment.isConfigured()) {
@@ -33,12 +102,10 @@ module.exports = function(db) {
       const { billId, paymentMethods } = req.body;
       if (!billId) return res.status(400).json({ error: 'billId is required' });
 
-      // Look up the bill
       const bill = await db.getById('bills', billId);
       if (!bill) return res.status(404).json({ error: 'Bill not found' });
       if (bill.s === 'Paid') return res.status(400).json({ error: 'Bill already paid' });
 
-      // Parse amount from bill (e.g., "RM 1,500" -> 150000 cents)
       const amountCents = payment.parseAmountToCents(bill.a);
 
       const result = await payment.createPaymentIntent({
@@ -50,7 +117,6 @@ module.exports = function(db) {
         paymentMethods: paymentMethods || ['fpx', 'card', 'grabpay']
       });
 
-      // Audit log
       createAuditEntry(db, {
         action: 'create',
         entity: 'payment_intent',
@@ -61,6 +127,40 @@ module.exports = function(db) {
       });
 
       res.json(result);
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/payments/verify-session/:sessionId — Verify checkout session completed
+  router.get('/verify-session/:sessionId', async (req, res) => {
+    try {
+      if (!payment.isConfigured()) {
+        return res.status(503).json({ error: 'Payment gateway not configured' });
+      }
+
+      const session = await payment.getCheckoutSession(req.params.sessionId);
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+
+      const billId = session.metadata && session.metadata.billId;
+      const billType = session.metadata && session.metadata.billType;
+      const paid = session.payment_status === 'paid';
+
+      // If paid, auto-mark the bill
+      if (paid && billId) {
+        await _markBillPaid(db, billId, billType, session.payment_intent ? session.payment_intent.id || session.payment_intent : null, req);
+      }
+
+      res.json({
+        status: session.payment_status,
+        paid,
+        billId,
+        billType,
+        amountTotal: session.amount_total,
+        currency: session.currency,
+        paymentMethod: session.payment_method_types ? session.payment_method_types[0] : null,
+        customerEmail: session.customer_details ? session.customer_details.email : null
+      });
     } catch(e) {
       res.status(500).json({ error: e.message });
     }
@@ -81,13 +181,22 @@ module.exports = function(db) {
   });
 
   // POST /api/payments/confirm/:billId — Confirm payment and mark bill as paid
-  // Called after successful Stripe payment on frontend
   router.post('/confirm/:billId', async (req, res) => {
     try {
       const { paymentIntentId } = req.body;
-      const bill = await db.getById('bills', req.params.billId);
+      const billId = req.params.billId;
+
+      // Try rent bills first, then utility bills
+      let bill = await db.getById('bills', billId);
+      let billType = 'rent';
+      if (!bill) {
+        bill = await db.getById('utility_bills', billId);
+        billType = 'utility';
+      }
       if (!bill) return res.status(404).json({ error: 'Bill not found' });
-      if (bill.s === 'Paid') return res.status(400).json({ error: 'Bill already paid' });
+
+      const alreadyPaid = billType === 'rent' ? bill.s === 'Paid' : bill.status === 'Paid';
+      if (alreadyPaid) return res.status(400).json({ error: 'Bill already paid' });
 
       // If Stripe is configured, verify the payment intent
       if (payment.isConfigured() && paymentIntentId) {
@@ -97,48 +206,7 @@ module.exports = function(db) {
         }
       }
 
-      // Mark bill as paid
-      await db.update('bills', req.params.billId, {
-        s: 'Paid',
-        paidAt: new Date().toISOString(),
-        paymentMethod: paymentIntentId ? 'stripe' : 'manual',
-        paymentIntentId: paymentIntentId || null
-      });
-
-      const result = { bill: { ...bill, s: 'Paid' }, reconnected: null, lockReEnabled: null };
-
-      // Auto-reconnect electric meter
-      const meters = await db.getAll('electric_meters');
-      const meter = meters.find(m => m.tenant === bill.t && m.status !== 'Connected');
-      if (meter) {
-        await db.update('electric_meters', meter.meterId, { status: 'Connected' });
-        result.reconnected = { meterId: meter.meterId, room: meter.room, unit: meter.unit };
-      }
-
-      // Auto re-enable smart lock
-      const locks = await db.getAll('smart_lock_registry');
-      const lock = locks.find(l => l.tenant === bill.t && l.status.includes('Disabled') && !l.status.includes('Lease Expired'));
-      if (lock) {
-        await db.updateWhere('smart_lock_registry', { tenant: bill.t }, { status: 'Active', fingerprints: 2 });
-        result.lockReEnabled = { tenant: bill.t, unit: lock.unit };
-      }
-
-      // Audit
-      createAuditEntry(db, {
-        action: 'update',
-        entity: 'bills',
-        entityId: bill.id,
-        user: req.user,
-        ip: req.ip,
-        details: { action: 'payment_confirmed', method: paymentIntentId ? 'stripe' : 'manual', paymentIntentId }
-      });
-
-      // Broadcast via WebSocket
-      const broadcast = req.app.get('broadcast');
-      if (broadcast) {
-        broadcast('bills', 'paid', { billId: bill.id, tenant: bill.t });
-      }
-
+      const result = await _markBillPaid(db, billId, billType, paymentIntentId, req);
       res.json(result);
     } catch(e) {
       res.status(500).json({ error: e.message });
@@ -174,3 +242,66 @@ module.exports = function(db) {
 
   return router;
 };
+
+// ---- Internal: mark bill as paid + auto-reconnect ----
+async function _markBillPaid(db, billId, billType, paymentIntentId, req) {
+  const result = { billId, billType, paid: true, reconnected: null, lockReEnabled: null };
+
+  if (billType === 'utility') {
+    await db.update('utility_bills', billId, {
+      status: 'Paid',
+      paidAt: new Date().toISOString(),
+      paymentMethod: paymentIntentId ? 'stripe' : 'manual',
+      paymentIntentId: paymentIntentId || null
+    });
+  } else {
+    const bill = await db.getById('bills', billId);
+    await db.update('bills', billId, {
+      s: 'Paid',
+      paidAt: new Date().toISOString(),
+      paymentMethod: paymentIntentId ? 'stripe' : 'manual',
+      paymentIntentId: paymentIntentId || null
+    });
+
+    // Auto-reconnect electric meter
+    if (bill && bill.t) {
+      const meters = await db.getAll('electric_meters');
+      const meter = meters.find(m => m.tenant === bill.t && m.status !== 'Connected');
+      if (meter) {
+        await db.update('electric_meters', meter.meterId, { status: 'Connected' });
+        result.reconnected = { meterId: meter.meterId, room: meter.room, unit: meter.unit };
+      }
+
+      // Auto re-enable smart lock
+      const locks = await db.getAll('smart_lock_registry');
+      const lock = locks.find(l => l.tenant === bill.t && l.status.includes('Disabled') && !l.status.includes('Lease Expired'));
+      if (lock) {
+        await db.updateWhere('smart_lock_registry', { tenant: bill.t }, { status: 'Active', fingerprints: 2 });
+        result.lockReEnabled = { tenant: bill.t, unit: lock.unit };
+      }
+    }
+  }
+
+  // Audit
+  if (req && req.user) {
+    const { createAuditEntry } = require('../middleware/audit');
+    createAuditEntry(db, {
+      action: 'update',
+      entity: billType === 'utility' ? 'utility_bills' : 'bills',
+      entityId: billId,
+      user: req.user,
+      ip: req.ip,
+      details: { action: 'payment_confirmed', method: paymentIntentId ? 'stripe' : 'manual', paymentIntentId }
+    });
+  }
+
+  // Broadcast via WebSocket
+  if (req && req.app) {
+    const broadcast = req.app.get('broadcast');
+    if (broadcast) {
+      broadcast('bills', 'paid', { billId, billType });
+    }
+  }
+
+  return result;
+}
