@@ -20,6 +20,7 @@
 - [Changing the Database Adapter](#changing-the-database-adapter)
 - [IoT & Automations](#iot--automations)
 - [Testing](#testing)
+- [Stripe Payment Integration](#stripe-payment-integration)
 - [Merging `staging` into `demo`](#merging-staging-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
@@ -59,9 +60,9 @@ Copy `.env.example` to `.env` and configure:
 | `JWT_SECRET` | **Yes** | Secret key for JWT signing |
 | `DB_PATH` | No | SQLite file path (default: `backend/data/westay.db`) |
 | `CORS_ORIGIN` | No | Allowed CORS origins (default: `*`) |
-| `STRIPE_SECRET_KEY` | No | Stripe API key for payments |
-| `STRIPE_PUBLISHABLE_KEY` | No | Stripe publishable key (for frontend Stripe.js) |
-| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `STRIPE_SECRET_KEY` | No | Stripe API secret key (enables real payments) |
+| `STRIPE_PUBLISHABLE_KEY` | No | Stripe publishable key (returned by GET /api/payments/status) |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret (for payment confirmation backup) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No | Email (Nodemailer) config |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | No | WhatsApp Cloud API config |
 | `SSL_KEY_PATH`, `SSL_CERT_PATH` | No | HTTPS certificate paths |
@@ -827,6 +828,266 @@ npm run test:coverage
 | `api.test.js` | API endpoint integration tests (auth, CRUD, pagination) | Routes + middleware |
 | `middleware.test.js` | Middleware unit tests (auth, validate, paginate, audit, error) | All middleware |
 | `services.test.js` | Service layer tests (notification, payment) | Services |
+
+---
+
+## Stripe Payment Integration
+
+WeStay uses **Stripe Checkout Sessions** for real payments. When Stripe is configured, tenants are redirected to Stripe's hosted payment page (FPX bank login, card form, or GrabPay authorization). When Stripe is **not** configured, the frontend falls back to a simulated payment experience.
+
+### How It Works (Architecture)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  FRONTEND (features-new.js / app.js)                                    │
+│                                                                         │
+│  1. Tenant clicks "Pay" → selectPaymentMethod(fpx/card/ewallet)        │
+│  2. processGatewayPayment() →                                          │
+│     a. GET /api/payments/status  (check if Stripe is configured)       │
+│     b. POST /api/payments/checkout  (create Checkout Session)          │
+│     c. window.location.href = session.sessionUrl  ← REDIRECT TO STRIPE│
+│                                                                         │
+│  3. After payment, Stripe redirects back to:                            │
+│     /?payment_success=BILL_ID&session_id=cs_xxx                        │
+│  4. _handlePaymentReturn() in app.js →                                 │
+│     GET /api/payments/verify-session/:sessionId                        │
+│  5. Bill marked as Paid → receipt shown                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  BACKEND (server.js / routes/payments.js / services/payment.js)         │
+│                                                                         │
+│  GET  /api/payments/status         → { configured: true/false }        │
+│  POST /api/payments/checkout       → Create Stripe Checkout Session    │
+│  GET  /api/payments/verify-session → Verify payment + mark bill paid   │
+│  POST /api/payments/webhook        → Stripe webhook (backup handler)   │
+│  POST /api/payments/confirm/:id    → Manual confirm + mark paid        │
+│  POST /api/payments/refund         → Stripe refund                     │
+│                                                                         │
+│  services/payment.js:                                                   │
+│  - createCheckoutSession()  → Stripe Checkout with FPX/card/GrabPay   │
+│  - constructWebhookEvent()  → Verify webhook signature                │
+│  - createRefund()           → Process refunds                          │
+│  - isConfigured()           → Check if STRIPE_SECRET_KEY is set        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  STRIPE (External)                                                      │
+│                                                                         │
+│  Checkout Session  → Hosted payment page (bank login / card / ewallet) │
+│  Webhook           → POST /api/payments/webhook (backup confirmation)  │
+│  Dashboard         → View payments, refunds, disputes                  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Supported Payment Methods (Malaysia)
+
+| Method | Stripe Type | Description |
+|---|---|---|
+| **FPX** | `fpx` | Malaysian online banking — redirects to bank login (Maybank, CIMB, Public Bank, RHB, Hong Leong, etc.) |
+| **Credit/Debit Card** | `card` | Visa, Mastercard — Stripe-hosted card form (PCI DSS compliant) |
+| **GrabPay** | `grabpay` | E-wallet — redirects to GrabPay authorization page |
+
+### Step 1: Create a Stripe Account
+
+1. Go to [https://dashboard.stripe.com/register](https://dashboard.stripe.com/register)
+2. Sign up (no credit card needed for test mode)
+3. Complete email verification
+
+> **Tip:** You can use Stripe in **Test Mode** (no real money) during development. Toggle "Test mode" on the Stripe dashboard.
+
+### Step 2: Get Your API Keys
+
+1. Go to [https://dashboard.stripe.com/test/apikeys](https://dashboard.stripe.com/test/apikeys) (note: `/test/` for test mode)
+2. Copy these two keys:
+   - **Publishable key** — starts with `pk_test_`
+   - **Secret key** — starts with `sk_test_` (click "Reveal test key")
+
+### Step 3: Configure `.env`
+
+Edit your `.env` file (copy from `.env.example` if you haven't):
+
+```env
+# ---- Payment Gateway (Stripe) ----
+STRIPE_SECRET_KEY=sk_test_51ABC...your_real_key...
+STRIPE_PUBLISHABLE_KEY=pk_test_51ABC...your_real_key...
+STRIPE_WEBHOOK_SECRET=whsec_...  # (set this in Step 5 below)
+```
+
+> **Important:** `sk_test_your_key_here` is a placeholder. Replace it with your actual key — otherwise `isConfigured()` returns `false` and you'll get simulation fallback.
+
+### Step 4: Enable FPX (for Malaysia)
+
+FPX is not enabled by default in Stripe. You must activate it:
+
+1. Go to [https://dashboard.stripe.com/test/settings/payment_methods](https://dashboard.stripe.com/test/settings/payment_methods)
+2. Find **FPX** and click **Turn on**
+3. Find **GrabPay** and click **Turn on**
+4. **Card** is enabled by default
+
+> **Note:** For **production** FPX, Stripe requires your business to be registered in Malaysia or have a Malaysian bank account. Test mode works globally.
+
+### Step 5: Set Up Webhooks
+
+Webhooks are the **backup** payment confirmation — they fire even if the user closes the browser before the redirect.
+
+#### For Local Development (use Stripe CLI)
+
+```bash
+# Install Stripe CLI
+# macOS: brew install stripe/stripe-cli/stripe
+# Windows: scoop install stripe (or download from https://stripe.com/docs/stripe-cli)
+
+# Login to Stripe
+stripe login
+
+# Forward webhooks to your local server
+stripe listen --forward-to localhost:3456/api/payments/webhook
+```
+
+The CLI will print a webhook signing secret like `whsec_...`. Copy it to your `.env`:
+
+```env
+STRIPE_WEBHOOK_SECRET=whsec_abc123...from_stripe_cli...
+```
+
+#### For Production (Dashboard Webhook)
+
+1. Go to [https://dashboard.stripe.com/test/webhooks](https://dashboard.stripe.com/test/webhooks) (or `/webhooks` for live mode)
+2. Click **Add endpoint**
+3. **Endpoint URL**: `https://your-domain.com/api/payments/webhook`
+4. **Events to listen to**: Select these events:
+   - `checkout.session.completed`
+   - `payment_intent.succeeded`
+5. Click **Add endpoint**
+6. Copy the **Signing secret** (`whsec_...`) into your `.env`
+
+### Step 6: Restart the Server
+
+```bash
+npm start
+```
+
+On startup, you should see:
+
+```
+  Payments  : Stripe (live)
+```
+
+Instead of:
+
+```
+  Payments  : Not configured
+```
+
+### Step 7: Test a Payment
+
+1. Login as **sarah** (tenant account)
+2. Go to **My Bills** → click **Pay** on any unpaid bill
+3. Select **FPX** / **Card** / **GrabPay**
+4. Click **Pay RM X.XX**
+5. You'll be **redirected to Stripe's hosted payment page**
+6. Use Stripe test credentials (see below)
+7. After completing payment, you're redirected back to WeStay
+8. `_handlePaymentReturn()` verifies the session and shows a receipt
+
+### Stripe Test Credentials
+
+| Method | Test Data |
+|---|---|
+| **Card** | Number: `4242 4242 4242 4242`, Expiry: any future date, CVC: any 3 digits |
+| **FPX** | Select any bank from the list → Stripe shows a test authorization page → click "Authorize test payment" |
+| **GrabPay** | Stripe shows a test authorization page → click "Authorize test payment" |
+
+> **Decline test:** Use card `4000 0000 0000 0002` to simulate a declined payment.
+
+For more test cards: [https://docs.stripe.com/testing](https://docs.stripe.com/testing)
+
+### Payment Flow (Detailed)
+
+```
+Tenant clicks "Pay"
+    │
+    ▼
+selectPaymentMethod('fpx' / 'card' / 'ewallet')
+    │
+    ▼
+processGatewayPayment(billType, billId)
+    │
+    ├── GET /api/payments/status
+    │   └── { configured: true }  ← Stripe is ready
+    │
+    ├── POST /api/payments/checkout
+    │   Body: { billId, billType, paymentMethod }
+    │   └── Returns: { sessionId, sessionUrl }
+    │
+    ▼
+window.location.href = sessionUrl  ← BROWSER REDIRECTS TO STRIPE
+    │
+    ▼
+┌──────────────────────────────┐
+│  STRIPE HOSTED PAYMENT PAGE  │
+│                              │
+│  FPX → Bank login page       │
+│  Card → Card number form     │
+│  GrabPay → Auth page         │
+└──────────────────────────────┘
+    │
+    ▼
+On success, Stripe redirects to:
+  /?payment_success=BILL_ID&session_id=cs_xxx
+    │
+    ▼
+_handlePaymentReturn()  (app.js)
+    │
+    ├── GET /api/payments/verify-session/cs_xxx
+    │   └── Server verifies with Stripe API + marks bill as Paid
+    │   └── Auto-reconnects electric meter + smart lock (if disconnected)
+    │
+    ▼
+Receipt shown + toast "Payment confirmed!"
+
+── BACKUP: Stripe webhook ──
+POST /api/payments/webhook
+    │
+    ▼
+Event: checkout.session.completed
+    │
+    └── _markBillPaid() → same bill update + auto-reconnect logic
+```
+
+### Simulation Fallback
+
+When Stripe is **not** configured (`STRIPE_SECRET_KEY` is missing or is the placeholder value), the frontend automatically falls back to a simulated payment experience:
+
+- **FPX**: Shows a mock bank selection grid (Maybank, CIMB, Public Bank, etc.)
+- **Card**: Shows a mock card entry form
+- **GrabPay**: Shows a mock authorization page
+
+This allows the app to demo the full payment UX on GitHub Pages or in offline mode without a Stripe account.
+
+### Production Checklist
+
+- [ ] Switch to **live mode** keys (`sk_live_...`, `pk_live_...`) on the Stripe Dashboard
+- [ ] Set up a **live webhook endpoint** (HTTPS required) pointing to `https://your-domain.com/api/payments/webhook`
+- [ ] Enable **FPX** and **GrabPay** in Stripe Dashboard → Settings → Payment Methods (requires Malaysia business verification for FPX)
+- [ ] Set `STRIPE_WEBHOOK_SECRET` to the live webhook signing secret
+- [ ] Update `CORS_ORIGIN` in `.env` to your production domain
+- [ ] Enable HTTPS (`SSL_ENABLED=true`) — Stripe requires HTTPS for production
+- [ ] Test with Stripe's test cards before going live
+- [ ] Monitor payments in Stripe Dashboard → Payments
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|---|---|---|
+| "Payment gateway not configured" on API call | `STRIPE_SECRET_KEY` not set or still placeholder | Set real `sk_test_...` key in `.env` |
+| Server shows `Payments: Not configured` | Same as above | Check `.env` |
+| Payment page doesn't redirect (shows simulation instead) | `_useAPI = false` (demo mode) or Stripe not configured | Login with real backend (not GitHub Pages), check `STRIPE_SECRET_KEY` |
+| FPX not available on Stripe checkout page | FPX not enabled in Stripe | Go to Stripe Dashboard → Settings → Payment methods → Turn on FPX |
+| Webhook errors in logs | `STRIPE_WEBHOOK_SECRET` wrong or missing | Recopy from Stripe CLI output or Dashboard |
+| "No such checkout session" on verify | Session expired (24 hours) | Payment must be completed within 24h of session creation |
+| Payment succeeds on Stripe but bill not marked paid | Webhook not configured or verify-session not called | Set up webhook as backup; check `_handlePaymentReturn()` runs on redirect |
 
 ---
 
