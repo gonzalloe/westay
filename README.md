@@ -21,6 +21,9 @@
 - [IoT & Automations](#iot--automations)
 - [Testing](#testing)
 - [Stripe Payment Integration](#stripe-payment-integration)
+- [Email (SMTP) Integration](#email-smtp-integration)
+- [WhatsApp (Meta Cloud API) Integration](#whatsapp-meta-cloud-api-integration)
+- [SSL / HTTPS Setup](#ssl--https-setup)
 - [Merging `staging` into `demo`](#merging-staging-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
@@ -1088,6 +1091,446 @@ This allows the app to demo the full payment UX on GitHub Pages or in offline mo
 | Webhook errors in logs | `STRIPE_WEBHOOK_SECRET` wrong or missing | Recopy from Stripe CLI output or Dashboard |
 | "No such checkout session" on verify | Session expired (24 hours) | Payment must be completed within 24h of session creation |
 | Payment succeeds on Stripe but bill not marked paid | Webhook not configured or verify-session not called | Set up webhook as backup; check `_handlePaymentReturn()` runs on redirect |
+
+---
+
+## Email (SMTP) Integration
+
+WeStay uses **Nodemailer** to send transactional emails (rent reminders, ticket updates). It works with any SMTP provider — Gmail, Mailgun, SendGrid SMTP relay, Amazon SES, or your own mail server.
+
+### How It Works (Architecture)
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  BACKEND                                                  │
+│                                                          │
+│  services/notification.js                                │
+│  ├── isEmailConfigured()  → checks SMTP_HOST/USER/PASS  │
+│  ├── sendEmail({ to, subject, text, html })              │
+│  ├── sendMultiChannel(db, { channels, ... })             │
+│  ├── rentDueEmailHtml()   → HTML template for rent       │
+│  └── ticketUpdateEmailHtml() → HTML template for tickets │
+│                                                          │
+│  routes/notifications.js                                 │
+│  ├── GET  /api/notifications/status     → channel avail  │
+│  ├── POST /api/notifications/email      → send one email │
+│  ├── POST /api/notifications/send       → multi-channel  │
+│  ├── POST /api/notifications/rent-reminder  → 1 tenant   │
+│  └── POST /api/notifications/bulk-rent-reminder → all    │
+└──────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────────┐
+│  SMTP SERVER (External)                                   │
+│  Gmail / Mailgun / SendGrid / Amazon SES / Custom         │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Fallback When Not Configured
+
+When SMTP is **not** configured, `isEmailConfigured()` returns `false`. Email sends return `{ success: false, error: 'Email not configured...' }` and are silently skipped in multi-channel sends. **In-app notifications always work** regardless.
+
+### Step 1: Choose an SMTP Provider
+
+| Provider | Free Tier | SMTP Host | Notes |
+|---|---|---|---|
+| **Gmail** | 500/day (personal) | `smtp.gmail.com` | Requires App Password (not regular password) |
+| **Mailgun** | 100/day (sandbox) | `smtp.mailgun.org` | Best for transactional email |
+| **SendGrid** | 100/day | `smtp.sendgrid.net` | Use API key as password |
+| **Amazon SES** | 62,000/month (from EC2) | `email-smtp.{region}.amazonaws.com` | Cheapest at scale |
+| **Mailtrap** | 100/month (testing) | `sandbox.smtp.mailtrap.io` | Great for dev — catches all emails |
+
+### Step 2: Get SMTP Credentials
+
+#### Gmail (Quick Start)
+
+1. Go to [https://myaccount.google.com/security](https://myaccount.google.com/security)
+2. Enable **2-Step Verification** (required)
+3. Go to [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+4. Select **Mail** → **Other** → name it "WeStay" → **Generate**
+5. Copy the 16-character App Password (e.g., `abcd efgh ijkl mnop`)
+
+#### Mailgun
+
+1. Sign up at [https://www.mailgun.com/](https://www.mailgun.com/)
+2. Go to **Sending** → **Domains** → select your sandbox domain
+3. Click **SMTP credentials** → note the login and password
+4. **For production:** Add and verify your own domain (requires DNS TXT/CNAME records)
+
+#### SendGrid
+
+1. Sign up at [https://sendgrid.com/](https://sendgrid.com/)
+2. Go to **Settings** → **API Keys** → **Create API Key** (Full Access)
+3. SMTP username is always `apikey`, password is your API key
+
+### Step 3: Configure `.env`
+
+```env
+# ---- Email (SMTP / Nodemailer) ----
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=abcd efgh ijkl mnop
+SMTP_FROM=noreply@westay.my
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `SMTP_HOST` | Yes | SMTP server hostname |
+| `SMTP_PORT` | No | Port (default: `587` for TLS, `465` for SSL) |
+| `SMTP_SECURE` | No | `true` for port 465 (SSL), `false` for port 587 (STARTTLS) |
+| `SMTP_USER` | Yes | SMTP login (email address or API key) |
+| `SMTP_PASS` | Yes | SMTP password or App Password |
+| `SMTP_FROM` | No | Sender address (default: `noreply@westay.my`) |
+
+### Step 4: Restart and Verify
+
+```bash
+npm start
+```
+
+Test with the API:
+
+```bash
+curl -X POST http://localhost:3456/api/notifications/email \
+  -H "Authorization: Bearer <your-jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"to": "test@example.com", "subject": "WeStay Test", "message": "Hello from WeStay!"}'
+```
+
+Check `GET /api/notifications/status` — should show `email.configured: true`.
+
+### Email Templates
+
+WeStay includes built-in HTML email templates:
+
+| Template | Function | Used By |
+|---|---|---|
+| **Rent Due Reminder** | `rentDueEmailHtml(name, amount, date, property)` | `/api/notifications/rent-reminder` |
+| **Ticket Update** | `ticketUpdateEmailHtml(name, ticketId, status, desc)` | (available for custom use) |
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|---|---|---|
+| `email.configured: false` on `/status` | Missing `SMTP_HOST`, `SMTP_USER`, or `SMTP_PASS` | Check `.env` — all three are required |
+| `Invalid login` error | Wrong credentials or Gmail blocking | Use App Password for Gmail; check provider docs |
+| `ECONNREFUSED` | Wrong host/port | Verify SMTP host and port; try port 465 with `SMTP_SECURE=true` |
+| Emails going to spam | No SPF/DKIM on sender domain | Set up SPF/DKIM DNS records, or use a verified Mailgun/SendGrid domain |
+| `self signed certificate` error | SMTP server uses self-signed cert | (For dev only) Set `NODE_TLS_REJECT_UNAUTHORIZED=0` — **never in production** |
+
+---
+
+## WhatsApp (Meta Cloud API) Integration
+
+WeStay can send WhatsApp messages to tenants via the **Meta (Facebook) Cloud API for WhatsApp Business**. This is used for rent reminders and announcements.
+
+### How It Works (Architecture)
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  BACKEND                                                  │
+│                                                          │
+│  services/notification.js                                │
+│  ├── isWhatsAppConfigured() → checks API_URL + TOKEN     │
+│  ├── sendWhatsApp({ to, message })       → text message  │
+│  ├── sendWhatsApp({ to, template, ... }) → template msg  │
+│  └── sendMultiChannel(db, { channels: ['whatsapp'] })    │
+│                                                          │
+│  routes/notifications.js                                 │
+│  ├── POST /api/notifications/whatsapp       → direct msg │
+│  └── POST /api/notifications/rent-reminder  → auto-adds  │
+│          WhatsApp if tenant has phone number              │
+└──────────────────────────────────────────────────────────┘
+         │
+         ▼  (native Node.js fetch — no extra library)
+┌──────────────────────────────────────────────────────────┐
+│  META GRAPH API                                           │
+│  https://graph.facebook.com/v17.0/{phone_id}/messages     │
+│                                                          │
+│  Supports: text messages + template messages               │
+│  Auth: Bearer token in Authorization header               │
+└──────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────────┐
+│  WHATSAPP                                                 │
+│  Message delivered to tenant's WhatsApp                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Fallback When Not Configured
+
+When WhatsApp is **not** configured, `isWhatsAppConfigured()` returns `false`. WhatsApp sends return `{ success: false, error: 'WhatsApp not configured...' }` and are silently skipped in multi-channel sends. **In-app notifications always work** regardless.
+
+### Prerequisites
+
+- A **Facebook Business Account** (free)
+- A **Meta Developer Account** (free)
+- A **WhatsApp Business API** app on Meta Developer Portal
+- A phone number registered with WhatsApp Business
+
+> **Note:** The WhatsApp Business API is **not** the same as WhatsApp Business App. The API is for programmatic message sending.
+
+### Step 1: Create a Meta Developer App
+
+1. Go to [https://developers.facebook.com/apps/](https://developers.facebook.com/apps/)
+2. Click **Create App** → Choose **Business** → Click **Next**
+3. Enter app name (e.g., "WeStay Notifications") → Select your Business Account → **Create App**
+4. On the app dashboard, find **WhatsApp** → Click **Set up**
+
+### Step 2: Get API Credentials
+
+1. In your Meta app, go to **WhatsApp** → **API Setup**
+2. You'll see:
+   - **Phone number ID** — a numeric ID like `1234567890123456`
+   - **WhatsApp Business Account ID**
+   - **Temporary access token** (expires in 24h — for testing only)
+3. Copy the **Phone number ID** and **Temporary access token**
+
+#### For Production: Generate a Permanent Token
+
+1. Go to [https://developers.facebook.com/tools/explorer/](https://developers.facebook.com/tools/explorer/)
+2. Select your app → Add permission `whatsapp_business_messaging`
+3. Generate a **System User token** with `whatsapp_business_messaging` permission
+4. This token does not expire
+
+Alternatively:
+1. Go to **Business Settings** → **System Users** → **Add** → Name: "WeStay API"
+2. Assign your WhatsApp Business Account as an Asset
+3. Generate token with `whatsapp_business_messaging` permission
+
+### Step 3: Configure `.env`
+
+```env
+# ---- WhatsApp (Meta Cloud API) ----
+WHATSAPP_API_URL=https://graph.facebook.com/v17.0/1234567890123456/messages
+WHATSAPP_API_TOKEN=EAAxxxxxxx...your_token_here...
+WHATSAPP_PHONE_ID=1234567890123456
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `WHATSAPP_API_URL` | Yes | Meta Graph API endpoint (replace `{phone_id}` with your actual phone number ID, or leave as `{phone_id}` — code replaces it) |
+| `WHATSAPP_API_TOKEN` | Yes | Bearer token for Meta API auth |
+| `WHATSAPP_PHONE_ID` | No | Phone number ID (used if `{phone_id}` is in the URL template) |
+
+### Step 4: Add a Test Phone Number
+
+During development, you can only send messages to **verified phone numbers**:
+
+1. In your Meta app → **WhatsApp** → **API Setup** → scroll to **"To" phone number**
+2. Click **Manage phone number list** → Add your number → Verify via SMS code
+
+### Step 5: Restart and Test
+
+```bash
+npm start
+```
+
+Test with the API:
+
+```bash
+curl -X POST http://localhost:3456/api/notifications/whatsapp \
+  -H "Authorization: Bearer <your-jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"to": "60123456789", "message": "Hello from WeStay!"}'
+```
+
+> **Phone format:** Use international format without `+` (e.g., `60123456789` for Malaysia).
+
+Check `GET /api/notifications/status` — should show `whatsapp.configured: true`.
+
+### Template Messages
+
+For production, WhatsApp requires **pre-approved message templates** for business-initiated conversations. The code supports templates:
+
+```bash
+curl -X POST http://localhost:3456/api/notifications/whatsapp \
+  -H "Authorization: Bearer <your-jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "60123456789",
+    "template": "rent_reminder",
+    "templateParams": { "name": "Sarah", "amount": "RM 850", "date": "2026-04-10" }
+  }'
+```
+
+To create templates:
+1. Go to Meta app → **WhatsApp** → **Message Templates** → **Create Template**
+2. Choose category **Utility** → Name: `rent_reminder`
+3. Add body with variables: `Hi {{1}}, your rent of {{2}} is due on {{3}}.`
+4. Submit for review (usually approved within minutes)
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|---|---|---|
+| `whatsapp.configured: false` on `/status` | Missing `WHATSAPP_API_URL` or `WHATSAPP_API_TOKEN` | Check `.env` |
+| `(#131030) Recipient phone number not in allowed list` | Sending to unverified number in test mode | Add the number in Meta app → API Setup → Manage phone numbers |
+| `Invalid OAuth 2.0 Access Token` | Token expired or wrong | Use a System User permanent token (see Step 2) |
+| `(#131047) Re-engagement message` | More than 24h since user's last message | Use an approved template message instead of text |
+| `ENOTFOUND graph.facebook.com` | No internet or DNS issue | Check network; ensure server has outbound HTTPS access |
+
+### Production Checklist
+
+- [ ] Replace temporary token with a **permanent System User token**
+- [ ] Create and get approval for all **message templates** you plan to use
+- [ ] Register your **own phone number** (instead of Meta's test number) for a branded sender
+- [ ] Set up a **webhook** in Meta app to receive message status updates (delivered, read)
+- [ ] Add your production server IP to the **App IP Whitelist** (optional, for security)
+
+---
+
+## SSL / HTTPS Setup
+
+WeStay includes built-in HTTPS support using Node.js `https` module. When enabled, it serves the app over TLS and automatically redirects HTTP to HTTPS.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  server.js                                               │
+│                                                         │
+│  1. createHTTPSServer(app) → reads SSL cert + key       │
+│  2. If certs found: HTTPS server on PORT                │
+│     + HTTP redirect server on port 80                   │
+│  3. If SSL not enabled: plain HTTP server (default)     │
+│                                                         │
+│  backend/https.js                                       │
+│  ├── isSSLEnabled()        → checks SSL_ENABLED + paths │
+│  ├── createHTTPSServer()   → returns https.Server       │
+│  ├── createRedirectServer()→ HTTP→HTTPS 301 redirect    │
+│  └── generateSelfSigned()  → dev certs via openssl      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Fallback When Not Configured
+
+When `SSL_ENABLED` is not `true` or cert files are missing, the server falls back to plain HTTP. The startup banner shows `HTTPS: Disabled`.
+
+### When Do You Need HTTPS?
+
+| Scenario | HTTPS Required? |
+|---|---|
+| Local development | No (HTTP on localhost is fine) |
+| Stripe production (live keys) | **Yes** — Stripe requires HTTPS for webhooks |
+| WhatsApp webhook receiving | **Yes** — Meta requires HTTPS for webhooks |
+| Public-facing deployment (VPS/cloud) | **Yes** — for security and SEO |
+| GitHub Pages (demo branch) | Not applicable — GitHub provides HTTPS |
+
+### Option A: Self-Signed Certificate (Development)
+
+For local HTTPS testing (browsers will show a security warning):
+
+```bash
+# Generate self-signed cert (requires OpenSSL installed)
+node -e "require('./backend/https').generateSelfSigned()"
+```
+
+This creates:
+- `certs/dev-privkey.pem` — private key
+- `certs/dev-cert.pem` — self-signed certificate
+
+Configure `.env`:
+
+```env
+SSL_ENABLED=true
+SSL_KEY_PATH=./certs/dev-privkey.pem
+SSL_CERT_PATH=./certs/dev-cert.pem
+```
+
+### Option B: Let's Encrypt (Production — Free)
+
+For a real certificate trusted by all browsers:
+
+#### Using Certbot (Linux/VPS)
+
+```bash
+# Install certbot
+sudo apt install certbot
+
+# Get certificate (your domain must point to the server)
+sudo certbot certonly --standalone -d yourdomain.com
+
+# Certificates are saved to:
+#   /etc/letsencrypt/live/yourdomain.com/privkey.pem
+#   /etc/letsencrypt/live/yourdomain.com/fullchain.pem
+```
+
+Configure `.env`:
+
+```env
+SSL_ENABLED=true
+SSL_KEY_PATH=/etc/letsencrypt/live/yourdomain.com/privkey.pem
+SSL_CERT_PATH=/etc/letsencrypt/live/yourdomain.com/fullchain.pem
+SSL_CA_PATH=/etc/letsencrypt/live/yourdomain.com/chain.pem
+HTTP_REDIRECT_PORT=80
+```
+
+> **Auto-renewal:** Certbot automatically renews certs. Add a cron job to restart the server after renewal:
+> ```bash
+> 0 3 * * * certbot renew --quiet && systemctl restart westay
+> ```
+
+#### Using Reverse Proxy (Recommended for Production)
+
+Most production setups put WeStay behind **Nginx** or **Caddy** which handle SSL termination:
+
+```
+Internet → Caddy/Nginx (HTTPS:443) → WeStay (HTTP:3456)
+```
+
+In this case, keep `SSL_ENABLED=false` and let the reverse proxy handle HTTPS.
+
+**Caddy example** (auto-HTTPS with zero config):
+
+```caddyfile
+yourdomain.com {
+    reverse_proxy localhost:3456
+}
+```
+
+**Nginx example:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:3456;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SSL_ENABLED` | Yes (to enable) | `false` | Set to `true` to enable HTTPS |
+| `SSL_KEY_PATH` | Yes (if enabled) | `./certs/privkey.pem` | Path to private key PEM file |
+| `SSL_CERT_PATH` | Yes (if enabled) | `./certs/fullchain.pem` | Path to certificate PEM file |
+| `SSL_CA_PATH` | No | `./certs/chain.pem` | CA chain (for intermediate certificates) |
+| `HTTP_REDIRECT_PORT` | No | `80` | Port for HTTP→HTTPS redirect server |
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|---|---|---|
+| `HTTPS: Disabled` in startup banner | `SSL_ENABLED` not `true` or cert paths missing | Set `SSL_ENABLED=true` and verify paths in `.env` |
+| `SSL key not found` warning | File doesn't exist at specified path | Check `SSL_KEY_PATH` — use absolute path if relative doesn't work |
+| Browser shows "Not Secure" / cert warning | Using self-signed cert | Expected in dev; use Let's Encrypt for production |
+| `EACCES` on port 80 (redirect server) | Port 80 requires root/admin | Use `sudo` on Linux, or change `HTTP_REDIRECT_PORT=8080` |
+| `EADDRINUSE` on port 80 | Another service (Nginx/Apache) using port 80 | Stop the other service, or use reverse proxy instead |
 
 ---
 
