@@ -711,35 +711,27 @@ function doReconnect(meter) {
 // Auto-reconnect when payment is made (hook into payBill)
 const originalPayBill = typeof payBill === 'function' ? payBill : null;
 function payBillWithAutoReconnect(id) {
-  // Call original
-  confirmDialog('Confirm Payment', 'Process payment for ' + id + '?', function() {
-    const b = BILLS.find(x => x.id === id);
-    if (!b) return;
-    b.s = 'Paid';
-    saveData();
-    toast(id + ' paid!', 'success');
-    pushNotif('fa-credit-card', '#00B894', 'Payment Processed', id + ' \u2014 ' + b.a);
-    // Auto reconnect electric — only the tenant's specific room meter
-    const meter = ELECTRIC_METERS.find(m => m.tenant === b.t && m.status !== 'Connected');
-    if (meter) {
-      meter.status = 'Connected';
-      AUTOMATIONS.latePmtElectric.log.push({ date: new Date().toISOString(), tenant: b.t, unit: meter.unit, room: meter.room, meterId: meter.meterId, action: 'Auto-reconnected Room ' + meter.room + ' after payment' });
-      saveAutomationState();
-      toast('Electric auto-reconnected for Room ' + meter.room + ' (' + meter.unit + ')', 'success');
-      pushNotif('fa-plug', '#00B894', 'Reconnected \u2014 Room ' + meter.room, b.t + ' @ ' + meter.unit + ' (auto after payment)');
-    }
-    // Auto re-enable fingerprint if was disabled due to late payment
-    const lock = SMART_LOCK_REGISTRY.find(l => l.tenant === b.t);
-    if (lock && lock.status.includes('Disabled') && !lock.status.includes('Lease Expired')) {
-      lock.status = 'Active';
-      lock.fingerprints = 2;
-      toast('Smart lock re-enabled for ' + b.t, 'success');
-    }
-    navigateTo(currentPage);
-  }, 'success');
+  // Auto-reconnect logic ONLY — no payment UI here, that's handled by payWithGateway
+  const b = BILLS.find(x => x.id === id);
+  if (!b) return;
+  // Auto reconnect electric — only the tenant's specific room meter
+  const meter = ELECTRIC_METERS.find(m => m.tenant === b.t && m.status !== 'Connected');
+  if (meter) {
+    meter.status = 'Connected';
+    AUTOMATIONS.latePmtElectric.log.push({ date: new Date().toISOString(), tenant: b.t, unit: meter.unit, room: meter.room, meterId: meter.meterId, action: 'Auto-reconnected Room ' + meter.room + ' after payment' });
+    saveAutomationState();
+    toast('Electric auto-reconnected for Room ' + meter.room + ' (' + meter.unit + ')', 'success');
+    pushNotif('fa-plug', '#00B894', 'Reconnected \u2014 Room ' + meter.room, b.t + ' @ ' + meter.unit + ' (auto after payment)');
+  }
+  // Auto re-enable fingerprint if was disabled due to late payment
+  const lock = SMART_LOCK_REGISTRY.find(l => l.tenant === b.t);
+  if (lock && lock.status.includes('Disabled') && !lock.status.includes('Lease Expired')) {
+    lock.status = 'Active';
+    lock.fingerprints = 2;
+    toast('Smart lock re-enabled for ' + b.t, 'success');
+  }
 }
-// Override payBill
-payBill = payBillWithAutoReconnect;
+// No longer override payBill — it now routes through payWithGateway in crud.js
 
 // ============================================================
 // AUTOMATION DASHBOARD (for the AI / Settings page)
