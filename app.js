@@ -161,14 +161,17 @@ const PAGE_MAP = {
       const res = await fetch((typeof API_BASE !== 'undefined' ? API_BASE : '/api') + '/auth/login', {
         method: 'POST', headers, body: JSON.stringify({ username, password })
       });
-      if (res.ok) {
+      // Check if response is JSON (from our API) vs HTML (from GitHub Pages / CDN)
+      const ct = (res.headers.get('content-type') || '');
+      const isJSON = ct.indexOf('application/json') !== -1;
+      if (res.ok && isJSON) {
         result = await res.json();
-      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
-        // Real API rejection — show the error, don't fall through to demo
-        const body = await res.json().catch(() => ({}));
+      } else if (!res.ok && isJSON) {
+        // Real API rejection (our server returned JSON error) — show it
+        const body = await res.json().catch(function() { return {}; });
         apiError = body.error || 'Invalid credentials';
       } else {
-        // Non-API response (e.g. 406 from GitHub Pages, 502 from proxy) — treat as server unavailable
+        // Not our API (GitHub Pages returns 405/406 with HTML) — treat as server unavailable
         apiError = null;
         result = null;
       }
