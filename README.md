@@ -24,6 +24,7 @@
 - [Email (SMTP) Integration](#email-smtp-integration)
 - [WhatsApp (Meta Cloud API) Integration](#whatsapp-meta-cloud-api-integration)
 - [SSL / HTTPS Setup](#ssl--https-setup)
+- [Hosting & Deployment](#hosting--deployment)
 - [Merging `staging` into `demo`](#merging-staging-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
@@ -1531,6 +1532,262 @@ server {
 | Browser shows "Not Secure" / cert warning | Using self-signed cert | Expected in dev; use Let's Encrypt for production |
 | `EACCES` on port 80 (redirect server) | Port 80 requires root/admin | Use `sudo` on Linux, or change `HTTP_REDIRECT_PORT=8080` |
 | `EADDRINUSE` on port 80 | Another service (Nginx/Apache) using port 80 | Stop the other service, or use reverse proxy instead |
+
+---
+
+## Hosting & Deployment
+
+### Hosting Environment Requirements
+
+WeStay is a **long-running Node.js server** (not serverless). Here's everything the hosting environment must support:
+
+| Requirement | Details |
+|---|---|
+| **Runtime** | Node.js **20 LTS** or newer (Express 5, sql.js WASM) |
+| **Process type** | Long-running server (NOT serverless/edge functions) |
+| **WebSocket** | Required — custom WS engine on `/ws` (HTTP Upgrade, same port) |
+| **Persistent disk** | Required — SQLite file (`backend/data/westay.db`), uploads (`backend/uploads/`), logs (`backend/logs/`) |
+| **Writable filesystem** | Required — SQLite writes on every mutation, multer saves uploads to disk |
+| **Port** | Single port (default `3456`, configurable via `PORT` env var). WS runs on same port |
+| **WASM support** | Required — sql.js loads `sql-wasm.wasm` at runtime (Node.js 18+ has this built-in) |
+| **Native modules** | None — all npm deps are pure JavaScript (no `node-gyp`, no C/C++ compiler needed) |
+| **Cron/scheduler** | Not needed — no background jobs (heartbeat is in-process `setInterval`) |
+| **Outbound HTTPS** | Needed only if using: Stripe API, WhatsApp API, SMTP email |
+
+### Resource Estimates
+
+| Resource | Minimum | Recommended | Notes |
+|---|---|---|------|
+| **RAM** | 256 MB | 512 MB | sql.js loads entire DB into memory (~1-5 MB for typical use) |
+| **CPU** | 1 shared vCPU | 1 dedicated vCPU | Very light workload — no heavy computation |
+| **Disk** | 500 MB | 1 GB+ | Code (~3 MB) + node_modules (~120 MB) + logs (up to 150 MB) + DB + uploads |
+| **Bandwidth** | 100 GB/month | Unlimited | SPA is lightweight; API traffic is minimal for co-living scale |
+
+### Platform Compatibility
+
+| Platform | Compatible | WebSocket | Persistent Disk | Free Tier | Notes |
+|---|---|---|---|---|---|
+| **Railway** | ✅ | ✅ | ✅ (volumes) | Trial $5 credit | ⭐ **Best pick** — easiest deploy, built-in volumes |
+| **Render** | ✅ | ✅ | ✅ (disk add-on) | 750h/month free | Good free tier, disk needs paid plan |
+| **Fly.io** | ✅ | ✅ | ✅ (volumes) | 3 shared VMs free | Edge deploy, good for SEA region |
+| **DigitalOcean Droplet** | ✅ | ✅ | ✅ (native) | — | $4/month (512 MB), full VPS control |
+| **Hetzner Cloud** | ✅ | ✅ | ✅ (native) | — | €3.29/month (2 GB), cheapest VPS |
+| **AWS Lightsail** | ✅ | ✅ | ✅ (native) | 3 months free | $3.50/month, AWS infrastructure |
+| **Heroku** | ⚠️ Partial | ✅ | ❌ Ephemeral FS | Eco $5/month | SQLite + uploads **lost on restart** |
+| **Vercel** | ❌ | ❌ | ❌ | — | Serverless — no WS, no long-running process |
+| **Netlify** | ❌ | ❌ | ❌ | — | Serverless functions only |
+| **Cloudflare Workers** | ❌ | ❌ | ❌ | — | No Node.js runtime, no FS |
+
+### 🏆 Recommended: Cheapest & Good Options
+
+#### Option 1: Railway (Easiest — PaaS)
+
+**Cost: ~$5/month** | Zero DevOps | Git push to deploy
+
+Railway is the fastest path from `git push` to production. It auto-detects Node.js, supports WebSocket, and has persistent volumes.
+
+```bash
+# 1. Install Railway CLI
+npm install -g @railway/cli
+
+# 2. Login & init
+railway login
+railway init
+
+# 3. Add persistent volume for SQLite + uploads
+railway volume add --mount /app/backend/data
+railway volume add --mount /app/backend/uploads
+railway volume add --mount /app/backend/logs
+
+# 4. Set environment variables
+railway variables set JWT_SECRET=your-strong-random-secret-here
+railway variables set NODE_ENV=production
+railway variables set PORT=3456
+railway variables set CORS_ORIGIN=https://your-app.up.railway.app
+# (Add SMTP, Stripe, WhatsApp vars as needed)
+
+# 5. Deploy
+railway up
+```
+
+**Pros:** Easiest setup, auto-SSL, auto-deploy from GitHub, built-in volumes, logs dashboard.  
+**Cons:** $5/month minimum after trial (no permanent free tier).
+
+#### Option 2: Hetzner Cloud VPS (Cheapest — IaaS)
+
+**Cost: €3.29/month (~RM 16)** | 2 GB RAM, 20 GB disk | Full VPS control
+
+Best value for money. Requires basic Linux knowledge.
+
+```bash
+# 1. Create a CX22 instance (2 GB RAM, 1 vCPU, 20 GB disk) — €3.29/month
+#    Choose: Ubuntu 22.04, Ashburn or Singapore datacenter
+
+# 2. SSH in and install Node.js
+ssh root@your-server-ip
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs git
+
+# 3. Clone and setup
+git clone https://github.com/gonzalloe/westay.git
+cd westay
+git checkout staging
+npm install --production
+cp .env.example .env
+nano .env  # Set JWT_SECRET, CORS_ORIGIN, etc.
+
+# 4. Install PM2 (process manager — keeps app running)
+npm install -g pm2
+pm2 start server.js --name westay
+pm2 save
+pm2 startup  # Auto-restart on reboot
+
+# 5. Install Caddy for auto-HTTPS (free Let's Encrypt)
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install caddy
+
+# 6. Configure Caddy (auto-HTTPS, reverse proxy)
+cat > /etc/caddy/Caddyfile << 'EOF'
+yourdomain.com {
+    reverse_proxy localhost:3456
+}
+EOF
+systemctl restart caddy
+
+# Done! https://yourdomain.com is live with auto-renewing SSL
+```
+
+**Pros:** Cheapest option, 2 GB RAM (overkill for WeStay), full server control, Singapore DC available (low latency for MY).  
+**Cons:** Manual setup, you manage updates/security.
+
+#### Option 3: DigitalOcean Droplet (Balanced)
+
+**Cost: $4/month** | 512 MB RAM, 10 GB disk | Good docs & community
+
+Same setup as Hetzner but with DigitalOcean's ecosystem (monitoring, backups, firewall UI).
+
+```bash
+# Create a $4/month Droplet: Basic, Regular, 512 MB / 1 vCPU / 10 GB SSD
+# Choose: Singapore datacenter (sgp1) — closest to Malaysia
+# Then follow the same steps as Hetzner above
+```
+
+#### Option 4: Fly.io (Free Tier — Edge)
+
+**Cost: Free (up to 3 VMs)** | 256 MB RAM | Edge deploy
+
+```bash
+# 1. Install flyctl
+curl -L https://fly.io/install.sh | sh
+
+# 2. Create app
+cd westay
+fly launch  # Auto-detects Node.js
+
+# 3. Create persistent volume
+fly volumes create westay_data --size 1 --region sin  # Singapore, 1 GB
+
+# 4. Add to fly.toml
+# [mounts]
+#   source = "westay_data"
+#   destination = "/data"
+
+# 5. Update .env: DB_PATH=/data/westay.db (symlink uploads + logs to /data too)
+
+# 6. Set secrets
+fly secrets set JWT_SECRET=your-strong-secret
+fly secrets set NODE_ENV=production
+
+# 7. Deploy
+fly deploy
+```
+
+**Pros:** Free tier, edge deployment (Singapore region), auto-SSL.  
+**Cons:** 256 MB might be tight, volume setup more complex, free tier may change.
+
+### Cost Comparison Summary
+
+| Platform | Monthly Cost | RAM | Disk | Setup Difficulty | Best For |
+|---|---|---|---|---|---|
+| **Fly.io** | Free | 256 MB | 1 GB vol | Medium | Testing / MVP on zero budget |
+| **Hetzner** | €3.29 (~RM 16) | 2 GB | 20 GB | Medium | Best value — production ready |
+| **AWS Lightsail** | $3.50 | 512 MB | 20 GB | Medium | AWS ecosystem |
+| **DigitalOcean** | $4 | 512 MB | 10 GB | Medium | Great docs, MY-friendly DC |
+| **Railway** | ~$5 | 512 MB | Volumes | **Easy** | Fastest deploy, zero DevOps |
+| **Render** | $7+ (with disk) | 512 MB | Persistent | Easy | Good monitoring UI |
+
+### Production Deployment Checklist
+
+Before going live, ensure these are configured:
+
+- [ ] **`JWT_SECRET`** — Set a strong random string (min 32 characters): `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+- [ ] **`NODE_ENV=production`** — Enables production logging level, stricter security
+- [ ] **`CORS_ORIGIN`** — Set to your actual domain (not `*`)
+- [ ] **HTTPS** — Use reverse proxy (Caddy/Nginx) or set `SSL_ENABLED=true`
+- [ ] **Persistent storage** — SQLite file, uploads, and logs on persistent disk/volume
+- [ ] **Process manager** — PM2 or Docker to auto-restart on crash
+- [ ] **Backups** — Schedule daily backup of `backend/data/westay.db` (it's a single file — just `cp` it)
+- [ ] **Firewall** — Only expose ports 80 (HTTP redirect) and 443 (HTTPS)
+- [ ] **Domain + DNS** — Point your domain's A record to server IP
+
+### Optional: Database Hosting for Future Scaling
+
+WeStay currently uses **SQLite (via sql.js)** — a single-file database loaded into memory. This is perfect for small-to-medium co-living operations (up to ~1000 tenants, 10K records). When you outgrow SQLite, the **repository pattern** in `backend/db/` makes migration straightforward.
+
+#### When to Migrate Away from SQLite
+
+| Signal | Threshold | What It Means |
+|---|---|---|
+| DB file size | > 100 MB | Memory usage too high (sql.js loads entire DB) |
+| Concurrent writes | > 50 req/sec | SQLite is single-writer (no concurrent writes) |
+| Multi-server | > 1 instance | SQLite is local — can't share across servers |
+| Data sensitivity | Production PII | Want managed backups, encryption at rest |
+
+#### Recommended: PostgreSQL (Best for Future Scaling)
+
+PostgreSQL is the industry standard for production apps. Cheapest managed options:
+
+| Provider | Free Tier | Paid Plan | Region | Notes |
+|---|---|---|---|---|
+| **Neon** | 512 MB free forever | $19/month (10 GB) | Singapore 🇸🇬 | ⭐ Best free tier, serverless Postgres, branching |
+| **Supabase** | 500 MB free, 2 projects | $25/month (8 GB) | Singapore 🇸🇬 | Postgres + auth + storage + real-time |
+| **Railway** | Included in $5 plan | — | US/EU | Postgres add-on, same platform as app |
+| **PlanetScale** | 5 GB free (MySQL) | $39/month | Singapore 🇸🇬 | MySQL-compatible, great for scaling (branching) |
+| **ElephantSQL** | 20 MB free | $5/month (100 MB) | Various | Simplest managed Postgres |
+| **AWS RDS** | 12 months free | $15+/month | Singapore 🇸🇬 | Enterprise grade |
+| **DigitalOcean Managed DB** | — | $15/month | Singapore 🇸🇬 | Easy setup, auto-backups |
+
+#### Migration Path (SQLite → PostgreSQL)
+
+The codebase is designed for this. You only need to:
+
+1. **Write a new adapter:** Create `backend/db/postgres-adapter.js` implementing the same `DatabaseInterface` from `backend/db/interface.js`
+2. **Swap in `backend/db/index.js`:** Change one line from `new SqliteAdapter()` to `new PostgresAdapter()`
+3. **Add `pg` package:** `npm install pg`
+4. **Migrate data:** Export SQLite data as JSON → import into Postgres
+
+```
+backend/db/
+├── interface.js          ← Abstract contract (getAll, getById, create, update, delete...)
+├── sqlite-adapter.js     ← Current (swap this out)
+├── memory-adapter.js     ← Dev fallback
+├── postgres-adapter.js   ← NEW: implement same interface
+└── index.js              ← Change one line to swap adapter
+```
+
+No route files, no middleware, no frontend code needs to change — only the adapter.
+
+#### 🏆 Recommended DB Strategy
+
+| Phase | Database | Cost | When |
+|---|---|---|---|
+| **Now → MVP** | SQLite (current) | Free | 0-500 tenants, single server |
+| **Growth** | Neon (PostgreSQL) | Free → $19/month | 500+ tenants or multi-server |
+| **Scale** | Supabase or AWS RDS | $25+/month | Enterprise features, managed backups |
+
+> **TL;DR:** Stick with SQLite until you genuinely need to scale. When you do, Neon (free Postgres) is the cheapest path — and the repository pattern makes the migration a one-file change.
 
 ---
 
