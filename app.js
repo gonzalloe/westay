@@ -63,28 +63,70 @@ const PAGE_MAP = {
   }
 };
 
-// ---- LOGIN ----
+// ---- LOGIN (JWT Auth) ----
 (function initLogin() {
-  const roleGrid = document.getElementById('roleGrid');
   const loginBtn = document.getElementById('loginBtn');
-  let selectedRole = 'operator';
+  const passInput = document.getElementById('loginPass');
 
-  roleGrid.addEventListener('click', function(e) {
-    const btn = e.target.closest('.role-btn');
-    if (!btn) return;
-    roleGrid.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedRole = btn.dataset.role;
+  // Auto-login if token is still valid
+  const token = getAuthToken();
+  const user = getCurrentUser();
+  if (token && user) {
+    // Verify token is still valid
+    apiFetch('/auth/me').then(function(me) {
+      if (me) {
+        _currentUser = me;
+        loginAs(me.role);
+      } else {
+        clearAuth();
+      }
+    });
+  }
+
+  loginBtn.addEventListener('click', doLogin);
+  passInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
   });
 
-  loginBtn.addEventListener('click', function() {
-    loginAs(selectedRole);
-  });
+  async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPass').value;
+    const remember = document.getElementById('rememberMe').checked;
+    const errDiv = document.getElementById('loginError');
+
+    if (!username || !password) {
+      errDiv.querySelector('span').textContent = 'Please enter username and password';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+
+    const result = await apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+
+    loginBtn.disabled = false;
+    loginBtn.innerHTML = '<i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In';
+
+    if (!result || !result.token) {
+      errDiv.querySelector('span').textContent = (result && result.error) || 'Login failed. Check credentials.';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    errDiv.style.display = 'none';
+    setAuthToken(result.token, result.user, remember);
+    loginAs(result.user.role);
+  }
 })();
 
 function loginAs(role) {
   currentRole = role;
   const cfg = ROLE_CONFIG[role];
+  const user = getCurrentUser();
 
   // Hide login, show app
   document.getElementById('loginPage').classList.add('hidden');
@@ -98,6 +140,12 @@ function loginAs(role) {
   roleTag.textContent = cfg.label;
   roleTag.style.background = cfg.bg;
   roleTag.style.color = cfg.color;
+
+  // Override user info from JWT if available
+  if (user) {
+    cfg.user.name = user.name || cfg.user.name;
+    cfg.user.initials = (user.name || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || cfg.user.initials;
+  }
 
   // Build sidebar
   buildSidebar(cfg);
@@ -283,6 +331,7 @@ function renderFeed() {
 
 // ---- LOGOUT ----
 function logout() {
+  clearAuth();
   currentRole = null;
   currentPage = null;
   document.body.className = '';
@@ -291,6 +340,9 @@ function logout() {
   document.getElementById('sidebar').innerHTML = '';
   document.getElementById('mainContent').innerHTML = '';
 }
+
+// Alias for auto-logout on 401
+function doLogout() { logout(); }
 
 // ---- WORKFLOW TOGGLES ----
 document.addEventListener('click', function(e) {

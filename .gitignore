@@ -4,8 +4,8 @@
 # Node
 node_modules/
 
-# Server (not needed for GitHub Pages)
-server.js
+# Database files (generated at runtime)
+backend/data/*.db
 
 # OS files
 Thumbs.db

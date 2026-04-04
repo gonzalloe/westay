@@ -62,29 +62,157 @@ if (typeof document !== 'undefined') {
 
 // ============ END SECURITY UTILITIES ============
 
-// ---- PERSISTENCE (with obfuscation) ----
+// ---- API CONFIG ----
+const API_BASE = '/api';
+let _useAPI = true; // Will be set to false if server is unreachable (GitHub Pages fallback)
+let _authToken = null; // JWT token set after login
+let _currentUser = null; // Current user profile from login response
+
+// ---- TOKEN MANAGEMENT ----
+function setAuthToken(token, user, remember) {
+  _authToken = token;
+  _currentUser = user;
+  if (remember) {
+    localStorage.setItem('westay_token', token);
+    localStorage.setItem('westay_user', JSON.stringify(user));
+  } else {
+    sessionStorage.setItem('westay_token', token);
+    sessionStorage.setItem('westay_user', JSON.stringify(user));
+  }
+}
+
+function getAuthToken() {
+  if (_authToken) return _authToken;
+  _authToken = localStorage.getItem('westay_token') || sessionStorage.getItem('westay_token');
+  return _authToken;
+}
+
+function getCurrentUser() {
+  if (_currentUser) return _currentUser;
+  try {
+    const stored = localStorage.getItem('westay_user') || sessionStorage.getItem('westay_user');
+    if (stored) _currentUser = JSON.parse(stored);
+  } catch(e) {}
+  return _currentUser;
+}
+
+function clearAuth() {
+  _authToken = null;
+  _currentUser = null;
+  localStorage.removeItem('westay_token');
+  localStorage.removeItem('westay_user');
+  sessionStorage.removeItem('westay_token');
+  sessionStorage.removeItem('westay_user');
+}
+
+// ---- API HELPER (with JWT auth) ----
+async function apiFetch(path, opts) {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getAuthToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(API_BASE + path, Object.assign({ headers }, opts));
+
+    // Handle 401 — token expired or invalid
+    if (res.status === 401 && path !== '/auth/login') {
+      clearAuth();
+      if (typeof doLogout === 'function') doLogout();
+      return null;
+    }
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || 'HTTP ' + res.status);
+    }
+    return await res.json();
+  } catch(e) {
+    console.warn('[API] ' + path + ' failed:', e.message);
+    return null;
+  }
+}
+
+// ---- PERSISTENCE (API-first with localStorage fallback) ----
 function saveData() {
+  // Always save to localStorage as backup
   try {
     const raw = JSON.stringify({ PROPS, TENANTS, TICKETS, BILLS, VENDORS, WORK_ORDERS, LEADS, LANDLORDS, CONTRACTS, UTILITY_BILLS, CHECKINOUT_RECORDS, TICKET_PHOTOS });
     localStorage.setItem('westay_data', obfuscate(raw));
   } catch(e) {}
+  // Also sync to API (fire-and-forget, non-blocking)
+  if (_useAPI) {
+    apiFetch('/misc/save-data', {
+      method: 'POST',
+      body: JSON.stringify({ PROPS, TENANTS, TICKETS, BILLS, VENDORS, WORK_ORDERS, LEADS, LANDLORDS, CONTRACTS, UTILITY_BILLS, CHECKINOUT_RECORDS, TICKET_PHOTOS })
+    }).catch(function() {});
+  }
 }
+
 function loadData() {
+  // First try localStorage (synchronous, instant)
   try {
     const stored = localStorage.getItem('westay_data');
-    if (!stored) return;
-    // Support both obfuscated and legacy plain JSON
-    let raw;
-    try { raw = deobfuscate(stored); } catch(e) { raw = stored; }
-    const d = JSON.parse(raw);
-    if (!d) return;
-    ['PROPS','TENANTS','TICKETS','BILLS','VENDORS','WORK_ORDERS','LEADS','LANDLORDS','CONTRACTS','UTILITY_BILLS','CHECKINOUT_RECORDS'].forEach(k => {
+    if (stored) {
+      let raw;
+      try { raw = deobfuscate(stored); } catch(e) { raw = stored; }
+      const d = JSON.parse(raw);
+      if (d) {
+        ['PROPS','TENANTS','TICKETS','BILLS','VENDORS','WORK_ORDERS','LEADS','LANDLORDS','CONTRACTS','UTILITY_BILLS','CHECKINOUT_RECORDS'].forEach(k => {
+          if (d[k] && window[k]) { window[k].length = 0; d[k].forEach(x => window[k].push(x)); }
+        });
+        if (d.TICKET_PHOTOS) { Object.keys(TICKET_PHOTOS).forEach(k => delete TICKET_PHOTOS[k]); Object.assign(TICKET_PHOTOS, d.TICKET_PHOTOS); }
+      }
+    }
+  } catch(e) {}
+
+  // Then try API (async, will overwrite localStorage data if available)
+  loadDataFromAPI();
+}
+
+async function loadDataFromAPI() {
+  try {
+    const d = await apiFetch('/misc/all-data');
+    if (!d) { _useAPI = false; return; }
+    _useAPI = true;
+    // Merge all collections from server
+    const arrayCollections = ['PROPS','TENANTS','TICKETS','BILLS','VENDORS','WORK_ORDERS','LEADS','LANDLORDS','CONTRACTS','UTILITY_BILLS','CHECKINOUT_RECORDS'];
+    arrayCollections.forEach(k => {
       if (d[k] && window[k]) { window[k].length = 0; d[k].forEach(x => window[k].push(x)); }
     });
-    // Restore TICKET_PHOTOS (object, not array)
+    // Merge TICKET_PHOTOS
     if (d.TICKET_PHOTOS) { Object.keys(TICKET_PHOTOS).forEach(k => delete TICKET_PHOTOS[k]); Object.assign(TICKET_PHOTOS, d.TICKET_PHOTOS); }
-  } catch(e) {}
+    // Merge additional data from API that frontend needs
+    if (d.SMART_LOCK_REGISTRY && typeof SMART_LOCK_REGISTRY !== 'undefined') {
+      SMART_LOCK_REGISTRY.length = 0; d.SMART_LOCK_REGISTRY.forEach(x => SMART_LOCK_REGISTRY.push(x));
+    }
+    if (d.ELECTRIC_METERS && typeof ELECTRIC_METERS !== 'undefined') {
+      ELECTRIC_METERS.length = 0; d.ELECTRIC_METERS.forEach(x => ELECTRIC_METERS.push(x));
+    }
+    if (d.WATER_METERS && typeof WATER_METERS !== 'undefined') {
+      WATER_METERS.length = 0; d.WATER_METERS.forEach(x => WATER_METERS.push(x));
+    }
+    if (d.IOT_LOCKS && typeof IOT_LOCKS !== 'undefined') {
+      IOT_LOCKS.length = 0; d.IOT_LOCKS.forEach(x => IOT_LOCKS.push(x));
+    }
+    if (d.AUTOMATIONS && typeof AUTOMATIONS !== 'undefined') {
+      Object.assign(AUTOMATIONS, d.AUTOMATIONS);
+    }
+    // NOTIFS
+    if (d.NOTIFS) {
+      NOTIFS.length = 0; d.NOTIFS.forEach(x => NOTIFS.push(x));
+      if (typeof renderNotifPanel === 'function') renderNotifPanel();
+    }
+    // Re-render current page with fresh data
+    if (typeof navigateTo === 'function' && typeof currentPage !== 'undefined') {
+      navigateTo(currentPage);
+    }
+    console.log('[API] Data loaded from server');
+  } catch(e) {
+    _useAPI = false;
+    console.warn('[API] Server not available, using localStorage only');
+  }
 }
+
 loadData();
 
 // ---- TOAST SYSTEM ----
