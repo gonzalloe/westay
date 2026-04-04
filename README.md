@@ -13,7 +13,7 @@
 - [Tech Stack](#tech-stack)
 - [Architecture Overview](#architecture-overview)
 - [Backend Structure](#backend-structure)
-- [API Endpoints (~90 total)](#api-endpoints)
+- [API Endpoints (~105+ total)](#api-endpoints)
 - [Authentication & Roles](#authentication--roles)
 - [Database Layer](#database-layer)
 - [Changing the Database Adapter](#changing-the-database-adapter)
@@ -53,16 +53,21 @@ The server serves both the API (`/api/*`) and the frontend (static files from pr
 | **Backend** | Express 5.x |
 | **Database** | SQLite via [sql.js](https://github.com/nicolewhite/sql.js) (pure JS, no native deps) |
 | **Auth** | JWT ([jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken)) + bcrypt ([bcryptjs](https://www.npmjs.com/package/bcryptjs)) |
-| **CORS** | Enabled globally |
+| **Security** | helmet (HTTP headers) + express-rate-limit + CORS + input sanitization |
+| **i18n** | Built-in (English, Malay, Chinese) |
+| **Real-Time** | WebSocket (native, no socket.io) |
 
 ### Dependencies (package.json)
 
 ```
-express       ^5.2.1    — Web framework
-sql.js        ^1.14.1   — Pure-JS SQLite (WASM)
-jsonwebtoken  ^9.0.3    — JWT signing/verification
-bcryptjs      ^3.0.3    — Password hashing
-cors          ^2.8.6    — Cross-origin resource sharing
+express            ^5.2.1   — Web framework
+sql.js             ^1.14.1  — Pure-JS SQLite (WASM)
+jsonwebtoken       ^9.0.3   — JWT signing/verification
+bcryptjs           ^3.0.3   — Password hashing (async)
+cors               ^2.8.6   — Cross-origin resource sharing
+helmet             ^8.1.0   — HTTP security headers
+dotenv             ^17.4.0  — Environment variable management
+express-rate-limit ^8.3.2   — API rate limiting
 ```
 
 Zero dev dependencies. No bundler, no test framework (yet).
@@ -73,7 +78,8 @@ Zero dev dependencies. No bundler, no test framework (yet).
 
 ```
 project-root/
-├── server.js                   # Express entry point (port 3456)
+├── server.js                   # Express entry point (port 3456) + WebSocket
+├── .env.example                # Environment variable template
 ├── backend/
 │   ├── db/
 │   │   ├── interface.js        # Abstract DB contract (13 methods)
@@ -83,7 +89,18 @@ project-root/
 │   │   ├── seed.js             # Demo data (16+ entities)
 │   │   └── seed-users.js       # 5 default user accounts
 │   ├── middleware/
-│   │   └── auth.js             # JWT verify + role-based access control
+│   │   ├── auth.js             # JWT verify + role-based access control
+│   │   ├── validate.js         # Input validation + XSS sanitization
+│   │   ├── error-handler.js    # Centralized error handler
+│   │   ├── paginate.js         # Pagination helper (?page=1&limit=50)
+│   │   └── audit.js            # Audit log middleware (change tracking)
+│   ├── i18n/
+│   │   ├── index.js            # Translation engine + middleware
+│   │   └── locales/
+│   │       ├── en.js           # English translations
+│   │       ├── ms.js           # Malay (Bahasa Melayu) translations
+│   │       └── zh.js           # Chinese (中文) translations
+│   ├── websocket.js            # WebSocket real-time engine
 │   └── routes/
 │       ├── auth.js             # Login, register, profile, user mgmt
 │       ├── props.js            # Properties CRUD
@@ -97,7 +114,11 @@ project-root/
 │       ├── contracts.js        # Tenancy contracts + e-signing
 │       ├── utility-bills.js    # Utility bill generation + rates
 │       ├── iot.js              # Electric/water meters, smart locks, IoT locks
-│       └── misc.js             # Check-in/out, notifs, automations, config, bulk ops
+│       ├── misc.js             # Check-in/out, notifs, automations, config, bulk ops
+│       ├── reports.js          # Report export (JSON + CSV)
+│       ├── audit.js            # Audit log API (query, stats, CSV export)
+│       ├── docs.js             # Auto-generated API documentation (OpenAPI 3.0)
+│       └── i18n.js             # i18n API (locales, translations)
 ├── index.html                  # Frontend SPA entry
 ├── app.js, crud.js, ...        # Frontend JS modules
 └── styles.css                  # Frontend styles
@@ -333,9 +354,57 @@ Two data paradigms:
 | GET | `/api/misc/config/:key` | Authenticated | Get config entry |
 | GET | `/api/misc/property-expenses` | Authenticated | All property expenses |
 | PUT | `/api/misc/property-expenses/:prop` | Authenticated | Set expenses |
-| POST | `/api/misc/reset` | Authenticated | Reset all data to demo |
+| POST | `/api/misc/reset` | Operator only | Reset all data to demo |
 | GET | `/api/misc/all-data` | Authenticated | Bulk fetch (21 collections) |
-| POST | `/api/misc/save-data` | Authenticated | Bulk save |
+| POST | `/api/misc/save-data` | Operator only | Bulk save |
+
+### Reports (`/api/reports`) — 8 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/reports/owner/:name` | Authenticated | Owner report JSON (enhanced with summary) |
+| GET | `/api/reports/owner/:name/csv` | Authenticated | Owner report CSV download |
+| GET | `/api/reports/portfolio` | Authenticated | Portfolio report (all properties) |
+| GET | `/api/reports/portfolio/csv` | Authenticated | Portfolio report CSV download |
+| GET | `/api/reports/tenants/csv` | Authenticated | Export tenants as CSV |
+| GET | `/api/reports/bills/csv` | Authenticated | Export bills as CSV |
+| GET | `/api/reports/tickets/csv` | Authenticated | Export tickets as CSV |
+| GET | `/api/reports/work-orders/csv` | Authenticated | Export work orders as CSV |
+
+### Audit Log (`/api/audit`) — 3 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/audit` | Operator only | Query audit logs (`?action=create&entity=props&from=2026-04-01&limit=100`) |
+| GET | `/api/audit/stats` | Operator only | Aggregated audit statistics (by action, entity, user, time) |
+| GET | `/api/audit/export` | Operator only | Export audit logs as CSV |
+
+### API Documentation (`/api/docs`) — 2 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/docs` | Public | OpenAPI 3.0 JSON specification |
+| GET | `/api/docs/ui` | Public | Interactive HTML API documentation viewer |
+
+### i18n (`/api/i18n`) — 2 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/i18n/locales` | Public | List supported locales (`["en","ms","zh"]`) |
+| GET | `/api/i18n/translations/:locale` | Public | Get all translations for a locale |
+
+### WebSocket (`ws://localhost:PORT/ws`)
+
+Real-time event broadcasting. Connect via WebSocket, authenticate with JWT.
+
+| Message | Direction | Description |
+|---|---|---|
+| `{ type: "auth", token: "<JWT>" }` | Client → Server | Authenticate connection |
+| `{ type: "subscribe", channels: ["notifs","iot"] }` | Client → Server | Subscribe to channels |
+| `{ type: "event", channel: "notifs", event: "new", data: {...} }` | Server → Client | Real-time event push |
+| `{ type: "ping" }` / `{ type: "pong" }` | Bidirectional | Heartbeat |
+
+**Channels:** `notifs`, `tickets`, `bills`, `iot`, `audit`
 
 ---
 
@@ -539,12 +608,16 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 
 | Feature | Status | Details |
 |---|---|---|
-| REST API | ✅ | 13 route files, ~90 endpoints |
+| REST API | ✅ | 17 route files, ~105+ endpoints |
 | SQLite Database | ✅ | Persistent, auto-seed, repository pattern |
 | In-Memory DB | ✅ | Available as alternative adapter |
 | JWT Authentication | ✅ | Login, register, token refresh via 7-day expiry |
 | Role-Based Access | ✅ | 5 roles, per-route middleware enforcement |
-| Password Security | ✅ | bcrypt hashed, min 6 chars, change password endpoint |
+| Password Security | ✅ | async bcrypt hashed, min 6 chars, change password endpoint |
+| Security Hardening | ✅ | helmet + dotenv + express-rate-limit + CORS + input sanitization |
+| Input Validation | ✅ | Custom `validate()` middleware on all POST/PUT/PATCH routes |
+| API Pagination | ✅ | All list endpoints: `?page=1&limit=50` (backward-compatible) |
+| Centralized Error Handler | ✅ | `errorHandler` middleware catches all unhandled errors |
 | Property Management | ✅ | Full CRUD |
 | Tenant Management | ✅ | Full CRUD + status tracking |
 | Billing & Invoicing | ✅ | Full CRUD + auto-generate + pay |
@@ -552,7 +625,7 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 | Work Orders | ✅ | Full CRUD + vendor job tracking |
 | Vendor Management | ✅ | Full CRUD |
 | Lead Pipeline | ✅ | Full CRUD + status tracking |
-| Landlord Reports | ✅ | Owner report with revenue, meters, expenses |
+| Landlord Reports | ✅ | Owner report with revenue, meters, expenses, net income |
 | Contracts | ✅ | Full CRUD + e-sign |
 | Utility Bills | ✅ | Auto-generate from meter readings + rate config |
 | IoT Electric Meters | ✅ | Monitor, cut, reconnect, unit-wide ops |
@@ -567,6 +640,11 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 | Bulk Data Ops | ✅ | Fetch all / save all / reset to demo |
 | Demo Data Seeding | ✅ | 16+ entities auto-seeded |
 | Frontend API Integration | ✅ | Real login, Bearer token, API-first with localStorage fallback |
+| **Multi-Language (i18n)** | ✅ | English, Malay, Chinese — API + middleware + frontend-ready |
+| **Report Export** | ✅ | CSV export: owner reports, portfolio, tenants, bills, tickets, work orders |
+| **Audit Log** | ✅ | Full change tracking: create/update/delete/login + query/stats/CSV export |
+| **API Documentation** | ✅ | OpenAPI 3.0 spec + interactive HTML viewer at `/api/docs/ui` |
+| **WebSocket Real-Time** | ✅ | Native WS at `/ws` — notifications, IoT, tickets, bills, audit channels |
 
 ---
 
@@ -577,8 +655,6 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 | Feature | Priority | Details |
 |---|---|---|
 | **Payment Gateway** | High | No real payment integration. `PATCH /bills/:id/pay` just flips status. Need **Billplz**, **Revenue Monster**, or **Stripe** with FPX support for Malaysian market. |
-| **Environment Variables** | High | JWT secret is hardcoded as dev default. Need `.env` file with `dotenv` for secrets. |
-| **Input Validation** | High | No validation library (e.g., Joi, Zod). Route handlers do minimal checks. |
 | **HTTPS** | High | No SSL/TLS. Required for production. Use reverse proxy (Nginx) or hosting platform. |
 
 ### 🟡 Important (Should Have Before Launch)
@@ -587,9 +663,6 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 |---|---|---|
 | **File Upload** | Medium | Ticket photos are filename strings only — no actual file upload/storage. Need multer + S3/local storage. |
 | **Email/SMS Notifications** | Medium | In-app only. No Nodemailer, Twilio, or similar integration. |
-| **Rate Limiting** | Medium | No express-rate-limit or similar. API is open to abuse. |
-| **API Pagination** | Medium | All list endpoints return full arrays. Need `?page=1&limit=20` for large datasets. |
-| **Error Handling** | Medium | Basic try/catch. No centralized error handler, no structured error codes. |
 | **Logging** | Medium | `console.log` only. Need Winston or Pino for structured logging. |
 | **Test Suite** | Medium | Zero tests. Need Jest or Mocha for unit + integration tests. |
 
@@ -597,14 +670,24 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 
 | Feature | Priority | Details |
 |---|---|---|
-| **API Documentation** | Low | No Swagger/OpenAPI spec. This README covers it but auto-generated docs would be better. |
-| **WebSocket for Real-Time** | Low | No live updates. Notifications, IoT status, etc. are poll-based. |
 | **Tenant Portal Self-Service** | Low | Tenants can't register themselves. Operator must create accounts. |
-| **Report Export** | Low | Owner reports are JSON only. PDF/Excel export would be useful. |
-| **Multi-Language** | Low | English only. Consider i18n for Malay/Chinese. |
-| **Audit Log** | Low | No change tracking. Would help with accountability. |
 | **Docker** | Low | No Dockerfile. Would simplify deployment. |
 | **CI/CD** | Low | No GitHub Actions. Would automate testing + deployment. |
+
+### ✅ Recently Completed (moved from "NOT Done")
+
+| Feature | Completed | Details |
+|---|---|---|
+| ~~Environment Variables~~ | ✅ v1.1 | dotenv + `.env.example`, JWT secret from env |
+| ~~Input Validation~~ | ✅ v1.1 | Custom `validate()` middleware on all POST/PUT/PATCH |
+| ~~Rate Limiting~~ | ✅ v1.1 | Global 300/15min + Login 5/15min (`express-rate-limit`) |
+| ~~API Pagination~~ | ✅ v1.1 | All list endpoints support `?page=1&limit=50` |
+| ~~Error Handling~~ | ✅ v1.1 | Centralized `errorHandler` middleware |
+| ~~Multi-Language~~ | ✅ v1.2 | English, Malay, Chinese (i18n engine + API) |
+| ~~Report Export~~ | ✅ v1.2 | CSV export for owner reports, portfolio, tenants, bills, tickets, work orders |
+| ~~Audit Log~~ | ✅ v1.2 | Full change tracking with query API, stats, CSV export |
+| ~~API Documentation~~ | ✅ v1.2 | Auto-generated OpenAPI 3.0 spec + interactive HTML viewer at `/api/docs/ui` |
+| ~~WebSocket Real-Time~~ | ✅ v1.2 | Native WebSocket at `ws://localhost:PORT/ws` for live notifications, IoT, tickets |
 
 ---
 

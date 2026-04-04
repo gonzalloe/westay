@@ -34,6 +34,7 @@ class SqliteAdapter extends DatabaseInterface {
       water_meters: 'meterId',
       iot_locks: 'id',
       notifs: 'id',
+      audit_log: 'id',
       users: 'id'
     };
   }

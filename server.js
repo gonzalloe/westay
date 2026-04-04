@@ -14,6 +14,8 @@ const { getDB } = require('./backend/db');
 const { authenticate, requireRole, optionalAuth } = require('./backend/middleware/auth');
 const { sanitizeRequest } = require('./backend/middleware/validate');
 const errorHandler = require('./backend/middleware/error-handler');
+const { i18nMiddleware } = require('./backend/i18n');
+const { attachWebSocket, broadcast, getClientCount, getConnectedUsers } = require('./backend/websocket');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -38,6 +40,9 @@ app.use(express.json({ limit: '5mb' }));
 
 // Sanitize all incoming request bodies / query / params
 app.use(sanitizeRequest);
+
+// i18n: set req.locale and req.t() from Accept-Language or ?lang=
+app.use(i18nMiddleware);
 
 // ---- Rate Limiting ----
 
@@ -78,6 +83,21 @@ app.use('/api', async (req, res, next) => {
 
 (async () => {
   const db = await getDB();
+
+  // ==========================================
+  // Make broadcast available to routes for real-time events
+  // ==========================================
+  app.set('broadcast', broadcast);
+
+  // ==========================================
+  // PUBLIC ROUTES (no auth required)
+  // ==========================================
+
+  // API Documentation (public — no auth needed)
+  app.use('/api/docs', require('./backend/routes/docs')());
+
+  // i18n translations (public)
+  app.use('/api/i18n', require('./backend/routes/i18n')());
 
   // ==========================================
   // AUTH ROUTES (no auth required for login)
@@ -144,6 +164,22 @@ app.use('/api', async (req, res, next) => {
   const miscRouter = require('./backend/routes/misc')(db);
   app.use('/api/misc', authenticate, miscRouter);
 
+  // --- Reports: all authenticated (CSV export) ---
+  const reportsRouter = require('./backend/routes/reports')(db);
+  app.use('/api/reports', authenticate, reportsRouter);
+
+  // --- Audit: operator only ---
+  const auditRouter = require('./backend/routes/audit')(db);
+  app.use('/api/audit', authenticate, requireRole('operator'), auditRouter);
+
+  // --- WebSocket status endpoint ---
+  app.get('/api/ws/status', authenticate, requireRole('operator'), (req, res) => {
+    res.json({
+      connectedClients: getClientCount(),
+      authenticatedUsers: getConnectedUsers()
+    });
+  });
+
   // ---- Static Files (serves frontend from project root) ----
   app.use(express.static(path.join(__dirname), {
     extensions: ['html', 'css', 'js'],
@@ -164,17 +200,20 @@ app.use('/api', async (req, res, next) => {
   // ---- Centralized Error Handler (MUST be last middleware) ----
   app.use(errorHandler);
 
-  // ---- Start Server ----
-  app.listen(PORT, () => {
+  // ---- Start Server + WebSocket ----
+  const server = app.listen(PORT, () => {
     console.log('');
     console.log('  ===================================');
     console.log('  WeStay Backend Server');
     console.log('  ===================================');
-    console.log('  Frontend : http://localhost:' + PORT);
-    console.log('  API Base : http://localhost:' + PORT + '/api');
-    console.log('  Database : SQLite (backend/data/westay.db)');
-    console.log('  Auth     : JWT + bcrypt');
-    console.log('  Security : helmet + rate-limit + CORS + input sanitization');
+    console.log('  Frontend  : http://localhost:' + PORT);
+    console.log('  API Base  : http://localhost:' + PORT + '/api');
+    console.log('  API Docs  : http://localhost:' + PORT + '/api/docs/ui');
+    console.log('  WebSocket : ws://localhost:' + PORT + '/ws');
+    console.log('  Database  : SQLite (backend/data/westay.db)');
+    console.log('  Auth      : JWT + bcrypt');
+    console.log('  Security  : helmet + rate-limit + CORS + input sanitization');
+    console.log('  i18n      : English, Malay, Chinese');
     console.log('  ===================================');
     console.log('');
     console.log('  Default Accounts:');
@@ -184,20 +223,17 @@ app.use('/api', async (req, res, next) => {
     console.log('    vendor   / vendor123    (vendor - AirCool Services)');
     console.log('    agent    / agent123     (agent)');
     console.log('');
-    console.log('  Auth Endpoints:');
-    console.log('    POST /api/auth/login       Login (get JWT)');
-    console.log('    POST /api/auth/register    Create user (operator only)');
-    console.log('    GET  /api/auth/me          Current user profile');
-    console.log('    PATCH /api/auth/password   Change password');
-    console.log('    GET  /api/auth/users       List users (operator only)');
-    console.log('');
-    console.log('  Data Endpoints (all require Bearer token):');
-    console.log('    /api/props, /api/tenants, /api/tickets, /api/bills');
-    console.log('    /api/vendors, /api/work-orders, /api/leads');
-    console.log('    /api/landlords, /api/contracts, /api/utility-bills');
-    console.log('    /api/iot/*, /api/misc/*');
+    console.log('  New Features:');
+    console.log('    /api/docs/ui           Interactive API documentation');
+    console.log('    /api/reports/*         Report export (JSON + CSV)');
+    console.log('    /api/audit             Audit log (operator only)');
+    console.log('    /api/i18n/locales      Supported languages');
+    console.log('    ws://localhost:' + PORT + '/ws    Real-time events');
     console.log('');
   });
+
+  // Attach WebSocket handler to the HTTP server
+  attachWebSocket(server);
 
   dbReady = true;
 })();
