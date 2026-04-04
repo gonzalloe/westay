@@ -569,8 +569,23 @@ function adminUsers() {
 }
 
 function adminLoadUsers() {
+  // Demo mode fallback — show demo accounts when backend is unavailable
+  if (!_useAPI) {
+    var el = document.getElementById('adminUserList');
+    if (!el) return;
+    var demoUsers = [
+      { id: 1, username: 'admin', name: 'System Admin', role: 'admin', email: 'admin@westay.my' },
+      { id: 2, username: 'operator', name: 'Site Operator', role: 'operator', email: 'operator@westay.my' },
+      { id: 3, username: 'sarah', name: 'Sarah Chen', role: 'tenant', email: 'sarah@email.com' },
+      { id: 4, username: 'landlord', name: 'Mr. Tan', role: 'landlord', email: 'landlord@email.com' },
+      { id: 5, username: 'vendor', name: 'AirCool Services', role: 'vendor', email: 'vendor@email.com' },
+      { id: 6, username: 'agent', name: 'Lisa Wong', role: 'agent', email: 'agent@email.com' }
+    ];
+    _renderUserTable(el, demoUsers, true);
+    return;
+  }
   apiFetch('/auth/users').then(function(users) {
-    const el = document.getElementById('adminUserList');
+    var el = document.getElementById('adminUserList');
     if (!el) return;
     if (!users || users.error) {
       el.innerHTML = '<div style="color:var(--err)"><i class="fas fa-exclamation-circle"></i> ' + escHtml((users && users.error) || 'Failed to load users') + '</div>';
@@ -580,19 +595,24 @@ function adminLoadUsers() {
       el.innerHTML = '<div style="color:var(--t3)">No users found</div>';
       return;
     }
-    let tbl = '<table class="tbl"><thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>';
-    users.forEach(function(u) {
-      const roleColors = { admin:'#E84393', operator:'#6C5CE7', tenant:'#00CEC9', landlord:'#FD79A8', vendor:'#00B894', agent:'#FDCB6E' };
-      const rc = roleColors[u.role] || '#A7A5C6';
-      tbl += '<tr><td>' + u.id + '</td><td><strong>' + escHtml(u.username) + '</strong></td><td>' + escHtml(u.name) + '</td>' +
-        '<td><span class="bs" style="background:' + rc + '22;color:' + rc + '">' + escHtml(u.role) + '</span></td>' +
-        '<td>' + escHtml(u.email || '-') + '</td>' +
-        '<td>' + (u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never') + '</td>' +
-        '<td><button class="btn-s" style="background:var(--err);color:#fff" onclick="adminDeleteUser(' + u.id + ',\'' + escHtml(u.username) + '\')"><i class="fas fa-trash"></i></button></td></tr>';
-    });
-    tbl += '</tbody></table>';
-    el.innerHTML = tbl;
+    _renderUserTable(el, users, false);
   });
+}
+
+function _renderUserTable(el, users, isDemo) {
+  var tbl = '<table class="tbl"><thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>';
+  users.forEach(function(u) {
+    var roleColors = { admin:'#E84393', operator:'#6C5CE7', tenant:'#00CEC9', landlord:'#FD79A8', vendor:'#00B894', agent:'#FDCB6E' };
+    var rc = roleColors[u.role] || '#A7A5C6';
+    tbl += '<tr><td>' + u.id + '</td><td><strong>' + escHtml(u.username) + '</strong></td><td>' + escHtml(u.name) + '</td>' +
+      '<td><span class="bs" style="background:' + rc + '22;color:' + rc + '">' + escHtml(u.role) + '</span></td>' +
+      '<td>' + escHtml(u.email || '-') + '</td>' +
+      '<td>' + (u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never') + '</td>' +
+      '<td>' + (isDemo ? '<span style="font-size:10px;color:var(--t3)">Demo</span>' : '<button class="btn-s" style="background:var(--err);color:#fff" onclick="adminDeleteUser(' + u.id + ',\'' + escHtml(u.username) + '\')"><i class="fas fa-trash"></i></button>') + '</td></tr>';
+  });
+  tbl += '</tbody></table>';
+  if (isDemo) tbl += '<div style="text-align:center;padding:8px;font-size:10px;color:var(--t3)"><i class="fas fa-info-circle"></i> Demo mode — showing sample accounts. Connect backend for full user management.</div>';
+  el.innerHTML = tbl;
 }
 
 function adminAddUserModal() {
@@ -671,6 +691,24 @@ function adminAudit() {
 }
 
 function adminLoadAudit() {
+  // Demo mode fallback — show sample audit entries
+  if (!_useAPI) {
+    var el = document.getElementById('auditList');
+    if (!el) return;
+    var now = new Date();
+    var demoEntries = [
+      { timestamp: new Date(now - 3600000).toISOString(), action: 'login', entity: 'users', entityId: 1, username: 'admin', role: 'admin', details: { ip: '127.0.0.1' } },
+      { timestamp: new Date(now - 7200000).toISOString(), action: 'create', entity: 'bills', entityId: 'INV-001', username: 'operator', role: 'operator', details: { tenant: 'Sarah Chen', amount: 'RM 1500' } },
+      { timestamp: new Date(now - 10800000).toISOString(), action: 'update', entity: 'tickets', entityId: 'TK-001', username: 'operator', role: 'operator', details: { status: 'In Progress' } },
+      { timestamp: new Date(now - 14400000).toISOString(), action: 'create', entity: 'tenants', entityId: 3, username: 'admin', role: 'admin', details: { name: 'Sarah Chen' } },
+      { timestamp: new Date(now - 18000000).toISOString(), action: 'login', entity: 'users', entityId: 3, username: 'sarah', role: 'tenant', details: { ip: '192.168.1.5' } },
+      { timestamp: new Date(now - 21600000).toISOString(), action: 'update', entity: 'props', entityId: 'P001', username: 'landlord', role: 'landlord', details: { field: 'occupancy' } },
+      { timestamp: new Date(now - 86400000).toISOString(), action: 'delete', entity: 'tickets', entityId: 'TK-005', username: 'admin', role: 'admin', details: { reason: 'duplicate' } }
+    ];
+    _renderAuditTable(el, demoEntries, true);
+    return;
+  }
+
   let qs = '?limit=100';
   var action = document.getElementById('auditAction');
   var entity = document.getElementById('auditEntity');
@@ -682,7 +720,7 @@ function adminLoadAudit() {
   if (to && to.value) qs += '&to=' + to.value;
 
   apiFetch('/audit' + qs).then(function(entries) {
-    const el = document.getElementById('auditList');
+    var el = document.getElementById('auditList');
     if (!el) return;
     if (!entries || entries.error) {
       el.innerHTML = '<div style="color:var(--err)"><i class="fas fa-exclamation-circle"></i> ' + escHtml((entries && entries.error) || 'Failed to load audit log') + '</div>';
@@ -693,19 +731,24 @@ function adminLoadAudit() {
       el.innerHTML = '<div style="color:var(--t3)">No audit entries found</div>';
       return;
     }
-    let tbl = '<table class="tbl"><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>User</th><th>Details</th></tr></thead><tbody>';
-    list.forEach(function(e) {
-      const actionColors = { create:'#00B894', update:'#6C5CE7', delete:'#E17055', login:'#FDCB6E' };
-      const ac = actionColors[e.action] || '#A7A5C6';
-      tbl += '<tr><td style="white-space:nowrap;font-size:11px">' + new Date(e.timestamp).toLocaleString() + '</td>' +
-        '<td><span class="bs" style="background:' + ac + '22;color:' + ac + '">' + escHtml(e.action) + '</span></td>' +
-        '<td>' + escHtml(e.entity || '-') + (e.entityId ? ' #' + escHtml(String(e.entityId)) : '') + '</td>' +
-        '<td>' + escHtml(e.username || '-') + ' <span style="font-size:10px;color:var(--t3)">(' + escHtml(e.role || '-') + ')</span></td>' +
-        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">' + escHtml(e.details ? JSON.stringify(e.details).slice(0, 80) : '-') + '</td></tr>';
-    });
-    tbl += '</tbody></table>';
-    el.innerHTML = tbl;
+    _renderAuditTable(el, list, false);
   });
+}
+
+function _renderAuditTable(el, list, isDemo) {
+  var tbl = '<table class="tbl"><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>User</th><th>Details</th></tr></thead><tbody>';
+  list.forEach(function(e) {
+    var actionColors = { create:'#00B894', update:'#6C5CE7', delete:'#E17055', login:'#FDCB6E' };
+    var ac = actionColors[e.action] || '#A7A5C6';
+    tbl += '<tr><td style="white-space:nowrap;font-size:11px">' + new Date(e.timestamp).toLocaleString() + '</td>' +
+      '<td><span class="bs" style="background:' + ac + '22;color:' + ac + '">' + escHtml(e.action) + '</span></td>' +
+      '<td>' + escHtml(e.entity || '-') + (e.entityId ? ' #' + escHtml(String(e.entityId)) : '') + '</td>' +
+      '<td>' + escHtml(e.username || '-') + ' <span style="font-size:10px;color:var(--t3)">(' + escHtml(e.role || '-') + ')</span></td>' +
+      '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">' + escHtml(e.details ? JSON.stringify(e.details).slice(0, 80) : '-') + '</td></tr>';
+  });
+  tbl += '</tbody></table>';
+  if (isDemo) tbl += '<div style="text-align:center;padding:8px;font-size:10px;color:var(--t3)"><i class="fas fa-info-circle"></i> Demo mode — showing sample audit entries. Connect backend for real audit log.</div>';
+  el.innerHTML = tbl;
 }
 
 function adminExportAudit() {

@@ -420,7 +420,7 @@ function printUtilityBill() {
 }
 
 // ============================================================
-// PAYMENT GATEWAY — Tenant Online Payment Simulation
+// PAYMENT GATEWAY — Real Stripe Checkout + Simulation Fallback
 // ============================================================
 
 function tenantPayWithGateway(billType, billId) {
@@ -442,7 +442,7 @@ function tenantPayWithGateway(billType, billId) {
   html += '<div style="background:linear-gradient(135deg,#6C5CE7,#00B894);padding:22px;border-radius:16px;text-align:center;margin-bottom:18px">' +
     '<div style="font-size:28px;margin-bottom:4px">\uD83D\uDD12</div>' +
     '<h3 style="color:#fff;font-size:15px;margin-bottom:2px">SECURE PAYMENT</h3>' +
-    '<div style="color:rgba(255,255,255,.7);font-size:11px">WeStay Payment Gateway &bull; 256-bit SSL</div></div>';
+    '<div style="color:rgba(255,255,255,.7);font-size:11px">WeStay Payment Gateway &bull; Powered by Stripe</div></div>';
 
   // Amount display
   html += '<div style="text-align:center;padding:18px;background:var(--bg3);border-radius:14px;margin-bottom:16px">' +
@@ -453,10 +453,9 @@ function tenantPayWithGateway(billType, billId) {
   html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-wallet" style="color:var(--p);margin-right:6px"></i>Payment Method</div>';
   html += '<div id="pgMethods" style="display:grid;gap:8px;margin-bottom:16px">';
   var methods = [
-    { id: 'fpx', icon: 'fa-university', name: 'FPX Online Banking', desc: 'Pay via Malaysian banks', color: '#00B894' },
-    { id: 'card', icon: 'fa-credit-card', name: 'Credit / Debit Card', desc: 'Visa, Mastercard, AMEX', color: '#6C5CE7' },
-    { id: 'ewallet', icon: 'fa-mobile-alt', name: 'E-Wallet', desc: 'Touch n Go, GrabPay, Boost', color: '#FDCB6E' },
-    { id: 'qr', icon: 'fa-qrcode', name: 'DuitNow QR', desc: 'Scan QR code to pay', color: '#00CEC9' }
+    { id: 'fpx', icon: 'fa-university', name: 'FPX Online Banking', desc: 'Redirects to your bank', color: '#00B894' },
+    { id: 'card', icon: 'fa-credit-card', name: 'Credit / Debit Card', desc: 'Visa, Mastercard (Stripe hosted)', color: '#6C5CE7' },
+    { id: 'ewallet', icon: 'fa-mobile-alt', name: 'GrabPay', desc: 'Redirects to GrabPay', color: '#FDCB6E' }
   ];
   methods.forEach(function(m) {
     html += '<div id="pgm-' + m.id + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg3);border:2px solid transparent;border-radius:12px;cursor:pointer;transition:.2s" onclick="selectPaymentMethod(\'' + m.id + '\')" onmouseover="this.style.background=\'var(--card)\'" onmouseout="if(!this.classList.contains(\'pg-sel\'))this.style.background=\'var(--bg3)\'">' +
@@ -467,40 +466,15 @@ function tenantPayWithGateway(billType, billId) {
   });
   html += '</div>';
 
-  // FPX bank selector (hidden by default)
-  html += '<div id="pgFpxBanks" style="display:none;margin-bottom:16px">' +
-    '<div class="form-group"><label>Select Your Bank</label>' +
-    '<select id="pgBankSel"><option value="">-- Select Bank --</option>' +
-    '<option>Maybank2u</option><option>CIMB Clicks</option><option>Public Bank</option>' +
-    '<option>RHB Now</option><option>Hong Leong Connect</option><option>AmOnline</option>' +
-    '<option>Bank Islam</option><option>Bank Rakyat</option><option>BSN</option>' +
-    '<option>OCBC Online</option><option>HSBC Online</option><option>UOB</option></select></div></div>';
-
-  // Card form (hidden by default)
-  html += '<div id="pgCardForm" style="display:none;margin-bottom:16px">' +
-    '<div class="form-group"><label>Card Number</label><input id="pgCardNum" placeholder="4111 1111 1111 1111" maxlength="19"></div>' +
-    '<div class="form-row"><div class="form-group"><label>Expiry</label><input id="pgCardExp" placeholder="MM/YY" maxlength="5"></div>' +
-    '<div class="form-group"><label>CVV</label><input id="pgCardCvv" placeholder="123" maxlength="4" type="password"></div></div>' +
-    '<div class="form-group"><label>Cardholder Name</label><input id="pgCardName" placeholder="Name on card"></div></div>';
-
-  // E-wallet selector (hidden by default)
-  html += '<div id="pgEwalletSel" style="display:none;margin-bottom:16px">' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
-    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-tng"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDCB3</div><div style="font-size:10px;font-weight:600">Touch n Go</div></div>' +
-    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-grab"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDE97</div><div style="font-size:10px;font-weight:600">GrabPay</div></div>' +
-    '<div style="padding:14px;background:var(--bg3);border-radius:10px;text-align:center;cursor:pointer;border:2px solid transparent" onclick="this.style.borderColor=\'var(--p)\'" id="ew-boost"><div style="font-size:18px;margin-bottom:4px">\uD83D\uDE80</div><div style="font-size:10px;font-weight:600">Boost</div></div></div></div>';
-
-  // QR code (hidden by default)
-  html += '<div id="pgQrDisplay" style="display:none;text-align:center;margin-bottom:16px">' +
-    '<div style="width:180px;height:180px;margin:0 auto;background:var(--bg3);border-radius:14px;display:flex;align-items:center;justify-content:center;border:2px solid var(--p)">' +
-    '<div><i class="fas fa-qrcode" style="font-size:80px;color:var(--p)"></i>' +
-    '<div style="font-size:9px;color:var(--t3);margin-top:6px">Scan with DuitNow</div></div></div>' +
-    '<div style="font-size:10px;color:var(--t3);margin-top:8px">QR code expires in 15 minutes</div></div>';
+  // Info about redirect
+  html += '<div id="pgRedirectInfo" style="display:none;margin-bottom:14px;padding:12px;background:#6C5CE722;border-radius:10px;text-align:center">' +
+    '<i class="fas fa-external-link-alt" style="color:var(--p);margin-right:6px"></i>' +
+    '<span style="font-size:11px;color:var(--t2)" id="pgRedirectText">You will be redirected to complete payment securely.</span></div>';
 
   // Security badge
   html += '<div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:14px">' +
     '<i class="fas fa-shield-alt" style="color:var(--ok);font-size:14px"></i>' +
-    '<div style="font-size:10px;color:var(--t3)">Secured by WeStay Payment Gateway &bull; PCI DSS Compliant &bull; 256-bit SSL</div></div>';
+    '<div style="font-size:10px;color:var(--t3)">Secured by Stripe &bull; PCI DSS Level 1 &bull; 256-bit SSL</div></div>';
 
   html += '</div>';
 
@@ -522,143 +496,70 @@ function selectPaymentMethod(method) {
   if (sel) { sel.style.borderColor = 'var(--p)'; sel.style.background = 'var(--card)'; sel.classList.add('pg-sel'); }
   var radio = document.getElementById('pgr-' + method);
   if (radio) { radio.style.background = 'var(--p)'; radio.style.borderColor = 'var(--p)'; }
-  // Toggle sub-forms
-  ['pgFpxBanks','pgCardForm','pgEwalletSel','pgQrDisplay'].forEach(function(id) { var el = document.getElementById(id); if(el) el.style.display = 'none'; });
-  var showMap = { fpx: 'pgFpxBanks', card: 'pgCardForm', ewallet: 'pgEwalletSel', qr: 'pgQrDisplay' };
-  var show = document.getElementById(showMap[method]);
-  if (show) show.style.display = 'block';
+  // Show redirect info
+  var info = document.getElementById('pgRedirectInfo');
+  var text = document.getElementById('pgRedirectText');
+  if (info) info.style.display = 'block';
+  var msgs = {
+    fpx: 'You will be redirected to your bank\'s login page to authorize payment.',
+    card: 'You will be redirected to a Stripe-hosted secure page to enter card details.',
+    ewallet: 'You will be redirected to GrabPay to authorize payment.'
+  };
+  if (text) text.textContent = msgs[method] || 'You will be redirected to complete payment securely.';
 }
 
 async function processGatewayPayment(billType, billId) {
   if (!_selectedPaymentMethod) { toast('Please select a payment method', 'error'); return; }
 
-  // Validate based on method
-  if (_selectedPaymentMethod === 'fpx') {
-    var bank = document.getElementById('pgBankSel');
-    if (bank && !bank.value) { toast('Please select your bank', 'error'); return; }
-  }
-  if (_selectedPaymentMethod === 'card') {
-    var num = document.getElementById('pgCardNum');
-    var cvv = document.getElementById('pgCardCvv');
-    if (num && num.value.replace(/\s/g,'').length < 13) { toast('Please enter a valid card number', 'error'); return; }
-    if (cvv && cvv.value.length < 3) { toast('Please enter CVV', 'error'); return; }
-  }
-
   // Show processing state
   var btn = document.getElementById('pgPayBtn');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Redirecting...';
     btn.style.opacity = '0.7';
   }
 
-  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'E-Wallet', qr: 'DuitNow QR' };
   var payMethod = _selectedPaymentMethod;
 
-  // ---- TRY REAL STRIPE INTEGRATION FIRST ----
-  if (_useAPI && billType === 'rent') {
+  // ---- TRY REAL STRIPE CHECKOUT SESSION ----
+  if (_useAPI) {
     try {
       // Check if Stripe is configured on the server
       var status = await apiFetch('/payments/status');
       if (status && status.configured) {
-        // Map frontend method to Stripe payment_method_types
-        var stripeMethods = [];
-        if (payMethod === 'fpx') stripeMethods = ['fpx'];
-        else if (payMethod === 'card') stripeMethods = ['card'];
-        else if (payMethod === 'ewallet') stripeMethods = ['grabpay'];
-        else stripeMethods = ['fpx', 'card', 'grabpay'];
-
-        // Create PaymentIntent via backend
-        var intent = await apiFetch('/payments/create-intent', {
+        // Create Checkout Session — server returns redirect URL
+        var session = await apiFetch('/payments/checkout', {
           method: 'POST',
-          body: JSON.stringify({ billId: billId, paymentMethods: stripeMethods })
+          body: JSON.stringify({
+            billId: billId,
+            billType: billType,
+            paymentMethod: payMethod
+          })
         });
 
-        if (intent && intent.clientSecret) {
-          // Load Stripe.js if not already loaded
-          if (!window.Stripe) {
-            var stripeScript = document.createElement('script');
-            stripeScript.src = 'https://js.stripe.com/v3/';
-            document.head.appendChild(stripeScript);
-            await new Promise(function(resolve) { stripeScript.onload = resolve; stripeScript.onerror = resolve; });
-          }
-
-          if (window.Stripe) {
-            // Stripe.js loaded — use it to redirect to payment page
-            var stripeKey = status.publishableKey || '';
-            if (stripeKey) {
-              var stripe = Stripe(stripeKey);
-              // For FPX, redirect to bank selection
-              if (payMethod === 'fpx') {
-                var bankVal = document.getElementById('pgBankSel') ? document.getElementById('pgBankSel').value.toLowerCase().replace(/\s+/g, '_') : '';
-                var fpxResult = await stripe.confirmFpxPayment(intent.clientSecret, {
-                  payment_method: { fpx: { bank: bankVal } },
-                  return_url: window.location.origin + window.location.pathname + '?payment_success=' + billId
-                });
-                if (fpxResult.error) {
-                  toast('Payment error: ' + fpxResult.error.message, 'error');
-                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
-                  return;
-                }
-                // FPX redirects to bank page — user won't see below
-                return;
-              }
-
-              // For card payments
-              if (payMethod === 'card') {
-                var cardResult = await stripe.confirmCardPayment(intent.clientSecret, {
-                  payment_method: {
-                    card: { token: 'tok_visa' }, // In production, use Stripe Elements
-                    billing_details: { name: document.getElementById('pgCardName') ? document.getElementById('pgCardName').value : '' }
-                  }
-                });
-                if (cardResult.error) {
-                  toast('Payment error: ' + cardResult.error.message, 'error');
-                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
-                  return;
-                }
-                if (cardResult.paymentIntent && cardResult.paymentIntent.status === 'succeeded') {
-                  // Confirm with backend
-                  await apiFetch('/payments/confirm/' + billId, {
-                    method: 'POST',
-                    body: JSON.stringify({ paymentIntentId: cardResult.paymentIntent.id })
-                  });
-                  showPaymentReceipt(billType, billId, payMethod, methodNames);
-                  return;
-                }
-              }
-
-              // For GrabPay (e-wallet)
-              if (payMethod === 'ewallet') {
-                var grabResult = await stripe.confirmGrabPayPayment(intent.clientSecret, {
-                  return_url: window.location.origin + window.location.pathname + '?payment_success=' + billId
-                });
-                if (grabResult.error) {
-                  toast('Payment error: ' + grabResult.error.message, 'error');
-                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
-                  return;
-                }
-                // GrabPay redirects to app/page — user won't see below
-                return;
-              }
-            }
-          }
+        if (session && session.sessionUrl) {
+          // Redirect to Stripe-hosted payment page (bank/card/ewallet)
+          toast('Redirecting to payment page...', 'info');
+          window.location.href = session.sessionUrl;
+          return;
         }
-        // If we got here with Stripe configured but something didn't work, fall through to simulation
-        console.warn('[Payment] Stripe configured but redirect not possible, falling back to simulation');
+        // If session creation failed, fall through to simulation
+        console.warn('[Payment] Checkout session creation failed, falling back to simulation');
       }
     } catch(e) {
       console.warn('[Payment] Stripe integration error, falling back to simulation:', e.message);
     }
   }
 
-  // ---- SIMULATION FALLBACK (no Stripe configured, or demo mode) ----
+  // ---- SIMULATION FALLBACK (no Stripe configured, demo mode, or GitHub Pages) ----
+  if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
+
   setTimeout(function() {
     if (billType === 'rent') {
       var bill = BILLS.find(function(b) { return b.id === billId; });
       if (bill) {
         bill.s = 'Paid';
-        // Also trigger auto-reconnect if applicable
         if (typeof payBillWithAutoReconnect === 'function') {
           payBillWithAutoReconnect(billId);
         }

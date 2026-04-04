@@ -39,7 +39,7 @@ app.use(cors({
 }));
 
 // Stripe webhook needs raw body BEFORE json parser
-app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     if (!payment.isConfigured()) {
       return res.status(503).json({ error: 'Payment gateway not configured' });
@@ -47,8 +47,29 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (re
     const sig = req.headers['stripe-signature'];
     const event = payment.constructWebhookEvent(req.body, sig);
 
-    // Handle payment events
-    if (event.type === 'payment_intent.succeeded') {
+    // Handle Checkout Session completed — auto-mark bill as paid
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      if (session.payment_status === 'paid' && session.metadata && session.metadata.billId) {
+        const billId = session.metadata.billId;
+        const billType = session.metadata.billType || 'rent';
+        const piId = session.payment_intent;
+        logger.info('Checkout completed — marking bill paid', { billId, billType, paymentIntent: piId });
+        try {
+          const { getDB } = require('./backend/db');
+          const db = await getDB();
+          if (billType === 'utility') {
+            await db.update('utility_bills', billId, { status: 'Paid', paidAt: new Date().toISOString(), paymentMethod: 'stripe', paymentIntentId: piId });
+          } else {
+            await db.update('bills', billId, { s: 'Paid', paidAt: new Date().toISOString(), paymentMethod: 'stripe', paymentIntentId: piId });
+          }
+          const broadcast = app.get('broadcast');
+          if (broadcast) broadcast('bills', 'paid', { billId, billType });
+        } catch(dbErr) {
+          logger.error('Webhook DB update failed', { error: dbErr.message, billId });
+        }
+      }
+    } else if (event.type === 'payment_intent.succeeded') {
       const pi = event.data.object;
       logger.info('Payment succeeded', { paymentIntentId: pi.id, amount: pi.amount, billId: pi.metadata.billId });
     } else if (event.type === 'payment_intent.payment_failed') {
