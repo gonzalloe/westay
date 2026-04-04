@@ -1,4 +1,4 @@
-// ============ CONTRACTS API ============
+﻿// ============ CONTRACTS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -18,7 +18,7 @@ module.exports = function(db) {
         contracts = await db.getAll('contracts');
       }
       res.json(paginate(contracts, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/:id', async (req, res) => {
@@ -26,7 +26,7 @@ module.exports = function(db) {
       const c = await db.getById('contracts', req.params.id);
       if (!c) return res.status(404).json({ error: 'Contract not found' });
       res.json(c);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/', validate({
@@ -49,7 +49,7 @@ module.exports = function(db) {
       };
       await db.create('contracts', contract);
       res.status(201).json(contract);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/:id', stripFields('id'), async (req, res) => {
@@ -57,7 +57,7 @@ module.exports = function(db) {
       const updated = await db.update('contracts', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Contract not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/contracts/:id/sign — E-sign contract
@@ -66,7 +66,7 @@ module.exports = function(db) {
       const updated = await db.update('contracts', req.params.id, { s: 'Active' });
       if (!updated) return res.status(404).json({ error: 'Contract not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.delete('/:id', async (req, res) => {
@@ -74,7 +74,7 @@ module.exports = function(db) {
       const ok = await db.delete('contracts', req.params.id);
       if (!ok) return res.status(404).json({ error: 'Contract not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

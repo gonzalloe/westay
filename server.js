@@ -27,7 +27,21 @@ const PORT = process.env.PORT || 3456;
 
 // Helmet: HTTP security headers (CSP, HSTS, X-Frame, etc.)
 app.use(helmet({
-  contentSecurityPolicy: false, // disabled — SPA loads inline scripts / CDN assets
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],    // SPA uses inline event handlers
+      styleSrc: ["'self'", "'unsafe-inline'"],      // SPA uses inline styles
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https://checkout.stripe.com", "https://api.stripe.com"],
+      frameSrc: ["'self'", "https://checkout.stripe.com"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  },
   crossOriginEmbedderPolicy: false
 }));
 
@@ -80,7 +94,7 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), asy
     res.json({ received: true });
   } catch (e) {
     logger.error('Webhook error', { error: e.message });
-    res.status(400).json({ error: 'Webhook error: ' + e.message });
+    res.status(400).json({ error: 'Webhook processing failed' });
   }
 });
 
@@ -118,6 +132,16 @@ const loginLimiter = rateLimit({
 });
 app.use('/api/auth/login', loginLimiter);
 
+// Forgot-password rate limit (prevent email enumeration / account takeover)
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 attempts per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset attempts, please try again in 1 hour' }
+});
+app.use('/api/auth/forgot-password', forgotPasswordLimiter);
+
 // ---- DB initialization guard ----
 let dbReady = false;
 
@@ -127,7 +151,7 @@ app.use('/api', async (req, res, next) => {
       await getDB();
       dbReady = true;
     } catch(e) {
-      return res.status(500).json({ error: 'Database initialization failed: ' + e.message });
+      return res.status(500).json({ error: 'Database initialization failed' });
     }
   }
   next();

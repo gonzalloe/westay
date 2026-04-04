@@ -3,7 +3,11 @@
 
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'westay-dev-secret-2026-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('[FATAL] JWT_SECRET environment variable is required. Set it in .env');
+  process.exit(1);
+}
 const TOKEN_EXPIRY = '7d';
 
 // Extract and verify JWT from Authorization header

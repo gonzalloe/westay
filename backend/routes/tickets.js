@@ -1,4 +1,4 @@
-// ============ TICKETS API ============
+﻿// ============ TICKETS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -20,7 +20,7 @@ module.exports = function(db) {
         tickets = await db.getAll('tickets');
       }
       res.json(paginate(tickets, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/tickets/:id
@@ -29,7 +29,7 @@ module.exports = function(db) {
       const tk = await db.getById('tickets', req.params.id);
       if (!tk) return res.status(404).json({ error: 'Ticket not found' });
       res.json(tk);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/tickets
@@ -53,7 +53,7 @@ module.exports = function(db) {
       };
       await db.create('tickets', ticket);
       res.status(201).json(ticket);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PUT /api/tickets/:id — Update ticket (including status changes)
@@ -63,7 +63,7 @@ module.exports = function(db) {
       const updated = await db.update('tickets', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Ticket not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/tickets/:id/status — Status transition shortcut
@@ -75,7 +75,7 @@ module.exports = function(db) {
       const updated = await db.update('tickets', req.params.id, { s: status, time: 'Just now' });
       if (!updated) return res.status(404).json({ error: 'Ticket not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/tickets/:id
@@ -84,7 +84,7 @@ module.exports = function(db) {
       const ok = await db.delete('tickets', req.params.id);
       if (!ok) return res.status(404).json({ error: 'Ticket not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // --- Ticket Photos ---
@@ -93,7 +93,7 @@ module.exports = function(db) {
     try {
       const photos = await db.getStore('ticket_photos', req.params.id);
       res.json(photos || []);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/tickets/:id/photos/upload — Upload actual image files
@@ -117,7 +117,7 @@ module.exports = function(db) {
       const updated = [...existing, ...newPhotos];
       await db.setStore('ticket_photos', req.params.id, updated);
       res.status(201).json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/tickets/:id/photos — Add photos by filename (legacy/fallback)
@@ -130,7 +130,7 @@ module.exports = function(db) {
       const updated = [...existing, ...filenames];
       await db.setStore('ticket_photos', req.params.id, updated);
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/tickets/:id/photos/:index
@@ -149,7 +149,7 @@ module.exports = function(db) {
       photos.splice(idx, 1);
       await db.setStore('ticket_photos', req.params.id, photos);
       res.json(photos);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

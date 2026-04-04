@@ -1,4 +1,4 @@
-// ============ PAYMENT ROUTES ============
+﻿// ============ PAYMENT ROUTES ============
 // Stripe Checkout Session integration for bill payments
 // Routes: /api/payments/*
 
@@ -85,7 +85,7 @@ module.exports = function(db) {
 
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -128,7 +128,7 @@ module.exports = function(db) {
 
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -162,7 +162,7 @@ module.exports = function(db) {
         customerEmail: session.customer_details ? session.customer_details.email : null
       });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -176,7 +176,7 @@ module.exports = function(db) {
       const result = await payment.getPaymentIntent(req.params.intentId);
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -209,7 +209,7 @@ module.exports = function(db) {
       const result = await _markBillPaid(db, billId, billType, paymentIntentId, req);
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -236,7 +236,7 @@ module.exports = function(db) {
 
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

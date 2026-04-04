@@ -1,4 +1,4 @@
-// ============ WORK ORDERS API ============
+﻿// ============ WORK ORDERS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -18,7 +18,7 @@ module.exports = function(db) {
         orders = await db.getAll('work_orders');
       }
       res.json(paginate(orders, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/:id', async (req, res) => {
@@ -26,7 +26,7 @@ module.exports = function(db) {
       const wo = await db.getById('work_orders', req.params.id);
       if (!wo) return res.status(404).json({ error: 'Work order not found' });
       res.json(wo);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/', validate({
@@ -47,7 +47,7 @@ module.exports = function(db) {
       };
       await db.create('work_orders', wo);
       res.status(201).json(wo);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/:id', stripFields('id'), async (req, res) => {
@@ -55,7 +55,7 @@ module.exports = function(db) {
       const updated = await db.update('work_orders', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Work order not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/work-orders/:id/status — Status transition
@@ -77,7 +77,7 @@ module.exports = function(db) {
         }
       }
       res.json({ ...(await db.getById('work_orders', req.params.id)) });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.delete('/:id', async (req, res) => {
@@ -85,7 +85,7 @@ module.exports = function(db) {
       const ok = await db.delete('work_orders', req.params.id);
       if (!ok) return res.status(404).json({ error: 'Work order not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

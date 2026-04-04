@@ -1,4 +1,4 @@
-// ============ UTILITY BILLS API ============
+﻿// ============ UTILITY BILLS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -19,7 +19,7 @@ module.exports = function(db) {
         bills = await db.getAll('utility_bills');
       }
       res.json(paginate(bills, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/utility-bills/:id
@@ -28,7 +28,7 @@ module.exports = function(db) {
       const b = await db.getById('utility_bills', req.params.id);
       if (!b) return res.status(404).json({ error: 'Utility bill not found' });
       res.json(b);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/utility-bills/generate — Auto-generate from meter readings
@@ -83,7 +83,7 @@ module.exports = function(db) {
         count++;
       }
       res.json({ generated: count });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/utility-bills/:id/pay
@@ -94,7 +94,7 @@ module.exports = function(db) {
       if (bill.status === 'Paid') return res.status(400).json({ error: 'Already paid' });
       await db.update('utility_bills', req.params.id, { status: 'Paid' });
       res.json({ ...bill, status: 'Paid' });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/:id', stripFields('id'), async (req, res) => {
@@ -102,7 +102,7 @@ module.exports = function(db) {
       const updated = await db.update('utility_bills', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Utility bill not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.delete('/:id', async (req, res) => {
@@ -110,7 +110,7 @@ module.exports = function(db) {
       const ok = await db.delete('utility_bills', req.params.id);
       if (!ok) return res.status(404).json({ error: 'Utility bill not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/utility-bills/rates — Get utility rates
@@ -118,7 +118,7 @@ module.exports = function(db) {
     try {
       const rates = await db.getAllStore('utility_rates');
       res.json(rates);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

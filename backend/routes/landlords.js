@@ -1,4 +1,4 @@
-// ============ LANDLORDS API ============
+﻿// ============ LANDLORDS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -8,7 +8,7 @@ module.exports = function(db) {
 
   router.get('/', async (req, res) => {
     try { res.json(paginate(await db.getAll('landlords'), req)); }
-    catch(e) { res.status(500).json({ error: e.message }); }
+    catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/:name', async (req, res) => {
@@ -16,7 +16,7 @@ module.exports = function(db) {
       const ll = await db.getById('landlords', decodeURIComponent(req.params.name));
       if (!ll) return res.status(404).json({ error: 'Landlord not found' });
       res.json(ll);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/landlords/:name/report — Owner report data
@@ -61,7 +61,7 @@ module.exports = function(db) {
         rates
       };
       res.json(report);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/', validate({
@@ -74,7 +74,7 @@ module.exports = function(db) {
       const ll = { n, props: props || [], units: units || 0, occ: 0, rev: 'RM 0', payout: 'RM 0' };
       await db.create('landlords', ll);
       res.status(201).json(ll);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/:name', stripFields('n'), async (req, res) => {
@@ -82,7 +82,7 @@ module.exports = function(db) {
       const updated = await db.update('landlords', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Landlord not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.delete('/:name', async (req, res) => {
@@ -90,7 +90,7 @@ module.exports = function(db) {
       const ok = await db.delete('landlords', decodeURIComponent(req.params.name));
       if (!ok) return res.status(404).json({ error: 'Landlord not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

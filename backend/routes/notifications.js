@@ -1,4 +1,4 @@
-// ============ NOTIFICATION ROUTES ============
+﻿// ============ NOTIFICATION ROUTES ============
 // API endpoints for sending notifications via email, WhatsApp, and in-app
 // Routes: /api/notifications/*
 
@@ -41,7 +41,7 @@ module.exports = function(db) {
       });
       res.json({ results });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -60,7 +60,7 @@ module.exports = function(db) {
       });
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -78,7 +78,7 @@ module.exports = function(db) {
       });
       res.json(result);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -123,7 +123,7 @@ module.exports = function(db) {
       const results = await notification.sendMultiChannel(db, opts);
       res.json({ bill: bill.id, tenant: bill.t, results });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -149,7 +149,7 @@ module.exports = function(db) {
 
       res.json({ sent: results.length, results });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

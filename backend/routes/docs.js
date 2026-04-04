@@ -35,6 +35,8 @@ const spec = {
     { name: 'Misc', description: 'Notifications, automations, check-in/out, config' },
     { name: 'Reports', description: 'Report export (JSON/CSV)' },
     { name: 'Audit', description: 'Audit log & change tracking' },
+    { name: 'Payments', description: 'Stripe payment gateway (FPX, card, GrabPay)' },
+    { name: 'Notifications', description: 'Multi-channel notifications (email, WhatsApp, in-app)' },
     { name: 'i18n', description: 'Internationalization' },
     { name: 'WebSocket', description: 'Real-time events (ws://)' }
   ],
@@ -183,6 +185,9 @@ const spec = {
     '/auth/password': {
       patch: { tags: ['Auth'], summary: 'Change password', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Password changed' } } }
     },
+    '/auth/forgot-password': {
+      post: { tags: ['Auth'], summary: 'Reset password by username + email', description: 'Generates a temporary password and (in production) emails it to the user. Rate limited: 3 attempts per hour.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['username', 'email'], properties: { username: { type: 'string', maxLength: 50 }, email: { type: 'string', maxLength: 200 } } } } } }, responses: { 200: { description: 'Password reset confirmation' }, 404: { description: 'No account found' }, 429: { description: 'Rate limited' } } }
+    },
     '/auth/users': {
       get: { tags: ['Auth'], summary: 'List all users (admin only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'User list' } } }
     },
@@ -251,6 +256,24 @@ const spec = {
     '/audit': { get: { tags: ['Audit'], summary: 'Query audit logs (?action=create&entity=props&from=2026-04-01)', security: [{ BearerAuth: [] }], description: 'Admin only. Supports filters: action, entity, userId, username, from, to, limit.', responses: { 200: { description: 'Audit log entries' } } } },
     '/audit/stats': { get: { tags: ['Audit'], summary: 'Audit log statistics', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Aggregated stats' } } } },
     '/audit/export': { get: { tags: ['Audit'], summary: 'Export audit logs as CSV', security: [{ BearerAuth: [] }], responses: { 200: { description: 'CSV file' } } } },
+
+    // ---- Payments ----
+    '/payments/status': { get: { tags: ['Payments'], summary: 'Check payment gateway configuration', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Payment gateway status & publishable key' } } } },
+    '/payments/checkout': { post: { tags: ['Payments'], summary: 'Create Stripe Checkout Session', security: [{ BearerAuth: [] }], description: 'Creates a Stripe-hosted checkout page. Supports FPX, card, and GrabPay. Redirects user to Stripe.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['billId'], properties: { billId: { type: 'string' }, billType: { type: 'string', enum: ['rent', 'utility'], default: 'rent' }, paymentMethod: { type: 'string', enum: ['auto', 'fpx', 'card', 'grabpay'], default: 'auto' } } } } } }, responses: { 200: { description: 'Checkout session URL' }, 503: { description: 'Payment gateway not configured' } } } },
+    '/payments/create-intent': { post: { tags: ['Payments'], summary: 'Create payment intent (legacy card flow)', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['billId'], properties: { billId: { type: 'string' }, paymentMethods: { type: 'array', items: { type: 'string' } } } } } } }, responses: { 200: { description: 'Payment intent client secret' } } } },
+    '/payments/verify-session/{sessionId}': { get: { tags: ['Payments'], summary: 'Verify checkout session & auto-mark bill paid', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Session payment status' } } } },
+    '/payments/{intentId}': { get: { tags: ['Payments'], summary: 'Get payment intent status', security: [{ BearerAuth: [] }], parameters: [{ name: 'intentId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Payment intent details' } } } },
+    '/payments/confirm/{billId}': { post: { tags: ['Payments'], summary: 'Confirm payment & mark bill as paid', security: [{ BearerAuth: [] }], parameters: [{ name: 'billId', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { paymentIntentId: { type: 'string' } } } } } }, responses: { 200: { description: 'Bill marked paid + auto-reconnect info' } } } },
+    '/payments/refund': { post: { tags: ['Payments'], summary: 'Refund a payment', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['paymentIntentId'], properties: { paymentIntentId: { type: 'string' }, amount: { type: 'integer', description: 'Partial refund amount in cents (omit for full refund)' } } } } } }, responses: { 200: { description: 'Refund details' } } } },
+    '/payments/webhook': { post: { tags: ['Payments'], summary: 'Stripe webhook (no auth — verified by signature)', description: 'Handles checkout.session.completed, payment_intent.succeeded, payment_intent.payment_failed events.', responses: { 200: { description: '{ received: true }' }, 400: { description: 'Invalid signature' } } } },
+
+    // ---- Notifications ----
+    '/notifications/status': { get: { tags: ['Notifications'], summary: 'Check notification channel availability', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Email, WhatsApp, in-app status' } } } },
+    '/notifications/send': { post: { tags: ['Notifications'], summary: 'Send multi-channel notification', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['channels', 'subject', 'message'], properties: { channels: { type: 'array', items: { type: 'string', enum: ['email', 'whatsapp', 'inapp'] } }, subject: { type: 'string', maxLength: 200 }, message: { type: 'string', maxLength: 2000 }, emailTo: { type: 'string' }, phone: { type: 'string' } } } } } }, responses: { 200: { description: 'Send results per channel' } } } },
+    '/notifications/email': { post: { tags: ['Notifications'], summary: 'Send email notification', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['to', 'subject', 'message'], properties: { to: { type: 'string' }, subject: { type: 'string' }, message: { type: 'string' }, html: { type: 'string' } } } } } }, responses: { 200: { description: 'Email send result' } } } },
+    '/notifications/whatsapp': { post: { tags: ['Notifications'], summary: 'Send WhatsApp message', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['to', 'message'], properties: { to: { type: 'string', maxLength: 20 }, message: { type: 'string', maxLength: 2000 }, template: { type: 'string' }, templateParams: { type: 'array', items: { type: 'string' } } } } } } }, responses: { 200: { description: 'WhatsApp send result' } } } },
+    '/notifications/rent-reminder': { post: { tags: ['Notifications'], summary: 'Send rent due reminder to a tenant', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['billId'], properties: { billId: { type: 'string' } } } } } }, responses: { 200: { description: 'Reminder sent (email + WhatsApp + in-app)' } } } },
+    '/notifications/bulk-rent-reminder': { post: { tags: ['Notifications'], summary: 'Send rent reminders for all pending bills', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ sent: count, results: [...] }' } } } },
 
     // ---- i18n ----
     '/i18n/locales': { get: { tags: ['i18n'], summary: 'List supported locales', responses: { 200: { description: '["en","ms","zh"]' } } } },

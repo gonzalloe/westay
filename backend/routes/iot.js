@@ -1,4 +1,4 @@
-// ============ IoT API (Electric Meters, Water Meters, Smart Locks, IoT Locks) ============
+﻿// ============ IoT API (Electric Meters, Water Meters, Smart Locks, IoT Locks) ============
 const express = require('express');
 const router = express.Router();
 const { validate } = require('../middleware/validate');
@@ -15,7 +15,7 @@ module.exports = function(db) {
         : await db.getAll('electric_meters');
       if (req.query.status) meters = meters.filter(m => m.status === req.query.status);
       res.json(paginate(meters, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/iot/electric-meters/:meterId
@@ -24,7 +24,7 @@ module.exports = function(db) {
       const m = await db.getById('electric_meters', req.params.meterId);
       if (!m) return res.status(404).json({ error: 'Meter not found' });
       res.json(m);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/electric-meters/:meterId/cut — Manual cut
@@ -45,7 +45,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'latePmtElectric', autoState);
       }
       res.json({ ...(await db.getById('electric_meters', req.params.meterId)) });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/electric-meters/:meterId/reconnect
@@ -61,7 +61,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'latePmtElectric', autoState);
       }
       res.json({ ...(await db.getById('electric_meters', req.params.meterId)) });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/iot/electric-meters/check-late-payment — Run auto-cut check
@@ -88,7 +88,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'latePmtElectric', autoState);
       }
       res.json({ cut });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/electric-meters/cut-unit/:unitName — Cut all rooms in a unit
@@ -105,7 +105,7 @@ module.exports = function(db) {
         await db.update('electric_meters', m.meterId, { status: 'Disconnected \u2014 ' + reason });
       }
       res.json({ cut: connected.length });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ---- WATER METERS ----
@@ -115,7 +115,7 @@ module.exports = function(db) {
         ? await db.query('water_meters', { unit: req.query.unit })
         : await db.getAll('water_meters');
       res.json(paginate(meters, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/water-meters/:meterId', async (req, res) => {
@@ -123,13 +123,13 @@ module.exports = function(db) {
       const m = await db.getById('water_meters', req.params.meterId);
       if (!m) return res.status(404).json({ error: 'Water meter not found' });
       res.json(m);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ---- SMART LOCK REGISTRY (Fingerprints) ----
   router.get('/smart-locks', async (req, res) => {
     try { res.json(paginate(await db.getAll('smart_lock_registry'), req)); }
-    catch(e) { res.status(500).json({ error: e.message }); }
+    catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/smart-locks/:tenant/disable
@@ -148,7 +148,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'smartLockExpiry', autoState);
       }
       res.json(await db.getById('smart_lock_registry', tenant));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/smart-locks/:tenant/enable
@@ -164,7 +164,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'smartLockExpiry', autoState);
       }
       res.json(await db.getById('smart_lock_registry', tenant));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/iot/smart-locks/check-expiry — Run expiry check
@@ -191,7 +191,7 @@ module.exports = function(db) {
         await db.setStore('automations', 'smartLockExpiry', autoState);
       }
       res.json({ disabled });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ---- IoT LOCKS (physical lock devices) ----
@@ -207,7 +207,7 @@ module.exports = function(db) {
         }
       }
       res.json(paginate(locks, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/locks/:id', async (req, res) => {
@@ -215,7 +215,7 @@ module.exports = function(db) {
       const lock = await db.getById('iot_locks', req.params.id);
       if (!lock) return res.status(404).json({ error: 'Lock not found' });
       res.json(lock);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/iot/locks/:id/toggle — Lock/Unlock
@@ -226,7 +226,7 @@ module.exports = function(db) {
       const newStatus = lock.status === 'Locked' ? 'Unlocked' : 'Locked';
       await db.update('iot_locks', req.params.id, { status: newStatus, lastAccess: new Date().toISOString().replace('T', ' ').slice(0, 16) });
       res.json(await db.getById('iot_locks', req.params.id));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

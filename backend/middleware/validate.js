@@ -3,15 +3,28 @@
 // Strips unknown fields, sanitizes strings, enforces required fields.
 
 /**
- * Sanitize a string value — strip script tags, event handlers, JS protocol
+ * Sanitize a string value — strip ALL HTML tags, event handlers, dangerous protocols.
+ * Uses allowlist approach: strip everything that looks like HTML/script injection.
  */
 function sanitize(val) {
   if (typeof val !== 'string') return val;
   return val
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/on\w+\s*=/gi, '')
-    .replace(/javascript:/gi, '')
-    .replace(/data:text\/html/gi, '')
+    // Strip dangerous tags WITH their content (script, style, iframe, svg, object, embed, applet)
+    .replace(/<(script|style|iframe|svg|object|embed|applet)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    // Strip self-closing/unclosed dangerous tags
+    .replace(/<(script|style|iframe|svg|object|embed|applet)[^>]*\/?>/gi, '')
+    // Strip remaining HTML tags (keep text content — safe tags like <b>, <p>)
+    .replace(/<[^>]*>/g, '')
+    // Strip all on* event handlers (onclick=, onerror=, onload=, etc.)
+    .replace(/on\w+\s*=\s*(['"]?)[\s\S]*?\1/gi, '')
+    // Strip dangerous URI protocols
+    .replace(/(?:javascript|data|vbscript)\s*:/gi, '')
+    // Strip HTML5 base64 data URIs that could contain HTML
+    .replace(/data:[^,]*base64[^,]*,/gi, '')
+    // Strip expression() CSS
+    .replace(/expression\s*\(/gi, '')
+    // Strip url() with data/javascript
+    .replace(/url\s*\(\s*(['"]?)\s*(?:javascript|data|vbscript):/gi, 'url($1blocked:')
     .trim();
 }
 

@@ -1,4 +1,4 @@
-// ============ AUDIT LOG API ROUTES ============
+﻿// ============ AUDIT LOG API ROUTES ============
 // GET  /api/audit          — Query audit logs (operator only)
 // GET  /api/audit/stats    — Audit log statistics (operator only)
 // GET  /api/audit/export   — Export audit logs as CSV (operator only)
@@ -24,7 +24,7 @@ module.exports = function (db) {
         limit: req.query.limit
       });
       res.json(paginate(logs, req));
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/audit/stats — Aggregated audit statistics
@@ -61,7 +61,7 @@ module.exports = function (db) {
       }
 
       res.json(stats);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/audit/export — Export as CSV
@@ -95,7 +95,7 @@ module.exports = function (db) {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename=westay-audit-' + new Date().toISOString().slice(0, 10) + '.csv');
       res.send(csv);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

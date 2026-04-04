@@ -1,4 +1,4 @@
-// ============ PROPERTIES API ============
+﻿// ============ PROPERTIES API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -11,7 +11,7 @@ module.exports = function(db) {
     try {
       const props = await db.getAll('props');
       res.json(paginate(props, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/props/:name — Get property by name
@@ -20,7 +20,7 @@ module.exports = function(db) {
       const prop = await db.getById('props', req.params.name);
       if (!prop) return res.status(404).json({ error: 'Property not found' });
       res.json(prop);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/props — Create property
@@ -38,7 +38,7 @@ module.exports = function(db) {
       const prop = { n, o: 0, r: parseInt(r) || 30, c: colors[all.length % 8], icon: icon || 'fa-building', addr: addr || 'Kampar, Perak', rev: 0, type: type || 'Student' };
       await db.create('props', prop);
       res.status(201).json(prop);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PUT /api/props/:name — Update property
@@ -47,7 +47,7 @@ module.exports = function(db) {
       const updated = await db.update('props', req.params.name, req.body);
       if (!updated) return res.status(404).json({ error: 'Property not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/props/:name — Delete property
@@ -56,7 +56,7 @@ module.exports = function(db) {
       const ok = await db.delete('props', req.params.name);
       if (!ok) return res.status(404).json({ error: 'Property not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

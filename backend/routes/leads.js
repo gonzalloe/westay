@@ -1,4 +1,4 @@
-// ============ LEADS API ============
+﻿// ============ LEADS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -18,7 +18,7 @@ module.exports = function(db) {
         leads = await db.getAll('leads');
       }
       res.json(paginate(leads, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/:name', async (req, res) => {
@@ -26,7 +26,7 @@ module.exports = function(db) {
       const l = await db.getById('leads', decodeURIComponent(req.params.name));
       if (!l) return res.status(404).json({ error: 'Lead not found' });
       res.json(l);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/', validate({
@@ -45,7 +45,7 @@ module.exports = function(db) {
       };
       await db.create('leads', lead);
       res.status(201).json(lead);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/:name', stripFields('n'), async (req, res) => {
@@ -53,7 +53,7 @@ module.exports = function(db) {
       const updated = await db.update('leads', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Lead not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/leads/:name/status
@@ -65,7 +65,7 @@ module.exports = function(db) {
       const updated = await db.update('leads', decodeURIComponent(req.params.name), { s: status });
       if (!updated) return res.status(404).json({ error: 'Lead not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.delete('/:name', async (req, res) => {
@@ -73,7 +73,7 @@ module.exports = function(db) {
       const ok = await db.delete('leads', decodeURIComponent(req.params.name));
       if (!ok) return res.status(404).json({ error: 'Lead not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

@@ -1,4 +1,4 @@
-// ============ CHECK-IN/OUT, NOTIFICATIONS, AUTOMATIONS, CONFIG APIs ============
+﻿// ============ CHECK-IN/OUT, NOTIFICATIONS, AUTOMATIONS, CONFIG APIs ============
 const express = require('express');
 const router = express.Router();
 const { requireRole } = require('../middleware/auth');
@@ -14,7 +14,7 @@ module.exports = function(db) {
         ? await db.query('checkinout_records', { tenant: req.query.tenant })
         : await db.getAll('checkinout_records');
       res.json(paginate(records, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/checkinout/:id', async (req, res) => {
@@ -22,7 +22,7 @@ module.exports = function(db) {
       const r = await db.getById('checkinout_records', req.params.id);
       if (!r) return res.status(404).json({ error: 'Record not found' });
       res.json(r);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/checkinout', validate({
@@ -44,7 +44,7 @@ module.exports = function(db) {
       };
       await db.create('checkinout_records', record);
       res.status(201).json(record);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.put('/checkinout/:id', stripFields('id'), async (req, res) => {
@@ -52,7 +52,7 @@ module.exports = function(db) {
       const updated = await db.update('checkinout_records', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Record not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/misc/checkinout/:id/complete
@@ -61,13 +61,13 @@ module.exports = function(db) {
       const updated = await db.update('checkinout_records', req.params.id, { status: 'Completed' });
       if (!updated) return res.status(404).json({ error: 'Record not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== NOTIFICATIONS ==========
   router.get('/notifs', async (req, res) => {
     try { res.json(paginate(await db.getAll('notifs'), req)); }
-    catch(e) { res.status(500).json({ error: e.message }); }
+    catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.post('/notifs', validate({
@@ -81,7 +81,7 @@ module.exports = function(db) {
       const notif = { id: Date.now(), icon: icon || 'fa-bell', c: c || '#6C5CE7', title: title || '', desc: desc || '', time: 'Just now', read: false };
       await db.create('notifs', notif);
       res.status(201).json(notif);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.patch('/notifs/:id/read', async (req, res) => {
@@ -89,7 +89,7 @@ module.exports = function(db) {
       const updated = await db.update('notifs', parseInt(req.params.id), { read: true });
       if (!updated) return res.status(404).json({ error: 'Notification not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.patch('/notifs/read-all', async (req, res) => {
@@ -99,13 +99,13 @@ module.exports = function(db) {
         if (!n.read) await db.update('notifs', n.id, { read: true });
       }
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== AUTOMATIONS ==========
   router.get('/automations', async (req, res) => {
     try { res.json(await db.getAllStore('automations')); }
-    catch(e) { res.status(500).json({ error: e.message }); }
+    catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   router.get('/automations/:key', async (req, res) => {
@@ -113,7 +113,7 @@ module.exports = function(db) {
       const state = await db.getStore('automations', req.params.key);
       if (!state) return res.status(404).json({ error: 'Automation not found' });
       res.json(state);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/misc/automations/:key/toggle
@@ -124,7 +124,7 @@ module.exports = function(db) {
       state.enabled = !state.enabled;
       await db.setStore('automations', req.params.key, state);
       res.json(state);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== CONFIG / STORES ==========
@@ -134,13 +134,13 @@ module.exports = function(db) {
       const val = await db.getStore('config', req.params.key);
       if (val === null) return res.status(404).json({ error: 'Config not found' });
       res.json(val);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/misc/property-expenses
   router.get('/property-expenses', async (req, res) => {
     try { res.json(await db.getAllStore('property_expenses')); }
-    catch(e) { res.status(500).json({ error: e.message }); }
+    catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/misc/property-expenses/:prop
@@ -149,7 +149,7 @@ module.exports = function(db) {
       const exp = await db.getStore('property_expenses', decodeURIComponent(req.params.prop));
       if (!exp) return res.status(404).json({ error: 'Not found' });
       res.json(exp);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PUT /api/misc/property-expenses/:prop
@@ -157,7 +157,7 @@ module.exports = function(db) {
     try {
       await db.setStore('property_expenses', decodeURIComponent(req.params.prop), req.body);
       res.json(req.body);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== DATA RESET (ADMIN ONLY — destructive) ==========
@@ -172,7 +172,7 @@ module.exports = function(db) {
         await seedUsers(db);
       }
       res.json({ success: true, message: 'All data reset to demo state' });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== BULK DATA (for frontend initial load — replaces loadData()) ==========
@@ -202,7 +202,7 @@ module.exports = function(db) {
         COLORS: await db.getStore('config', 'colors'),
         AI_RESPONSES: await db.getStore('config', 'ai_responses')
       });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== BULK SAVE (ADMIN ONLY — destructive) ==========
@@ -226,7 +226,7 @@ module.exports = function(db) {
         for (const [k, v] of Object.entries(d.TICKET_PHOTOS)) await db.setStore('ticket_photos', k, v);
       }
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

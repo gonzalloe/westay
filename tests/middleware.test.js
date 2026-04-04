@@ -14,7 +14,7 @@ describe('Validation Middleware', () => {
     });
 
     test('strips event handlers', () => {
-      expect(sanitize('Click <div onmouseover=alert(1)>here</div>')).toBe('Click <div alert(1)>here</div>');
+      expect(sanitize('Click <div onmouseover=alert(1)>here</div>')).toBe('Click here');
     });
 
     test('strips javascript: protocol', () => {
@@ -22,7 +22,8 @@ describe('Validation Middleware', () => {
     });
 
     test('strips data:text/html', () => {
-      expect(sanitize('data:text/html,<h1>xss</h1>')).toBe(',<h1>xss</h1>');
+      expect(sanitize('data:text/html,<h1>xss</h1>')).not.toContain('data:');
+      expect(sanitize('data:text/html,<h1>xss</h1>')).not.toContain('<');
     });
 
     test('trims whitespace', () => {

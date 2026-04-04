@@ -15,8 +15,7 @@
 const { URL } = require('url');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'westay-dev-secret-2026-change-in-production';
+const { JWT_SECRET } = require('./middleware/auth');
 
 // Connected clients: Map<ws, { user, channels }>
 const clients = new Map();

@@ -1,4 +1,4 @@
-// ============ REPORT EXPORT API ============
+﻿// ============ REPORT EXPORT API ============
 // GET  /api/reports/owner/:name          — Owner report as JSON (existing)
 // GET  /api/reports/owner/:name/csv      — Owner report as CSV download
 // GET  /api/reports/portfolio            — Portfolio report (all properties)
@@ -78,7 +78,7 @@ module.exports = function (db) {
 
       const { csv, filename } = toCSV(headers, rows, 'westay-owner-report-' + name.replace(/\s+/g, '_') + '.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== OWNER REPORT JSON (enhanced) ==========
@@ -146,7 +146,7 @@ module.exports = function (db) {
       };
 
       res.json(report);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== PORTFOLIO REPORT (all properties) ==========
@@ -201,7 +201,7 @@ module.exports = function (db) {
       };
 
       res.json(report);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== PORTFOLIO REPORT CSV ==========
@@ -229,7 +229,7 @@ module.exports = function (db) {
 
       const { csv, filename } = toCSV(headers, rows, 'westay-portfolio-report.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== TENANTS CSV EXPORT ==========
@@ -240,7 +240,7 @@ module.exports = function (db) {
       const rows = tenants.map(t => [t.n, t.p, t.r, t.s, t.e, t.phone || '', t.dep || '']);
       const { csv, filename } = toCSV(headers, rows, 'westay-tenants.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== BILLS CSV EXPORT ==========
@@ -251,7 +251,7 @@ module.exports = function (db) {
       const rows = bills.map(b => [b.id, b.t, b.a, b.s, b.d, b.prop || '']);
       const { csv, filename } = toCSV(headers, rows, 'westay-bills.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== TICKETS CSV EXPORT ==========
@@ -262,7 +262,7 @@ module.exports = function (db) {
       const rows = tickets.map(t => [t.id, t.t, t.loc, t.pr, t.s, t.by || '', t.time || '']);
       const { csv, filename } = toCSV(headers, rows, 'westay-tickets.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // ========== WORK ORDERS CSV EXPORT ==========
@@ -273,7 +273,7 @@ module.exports = function (db) {
       const rows = orders.map(o => [o.id, o.desc, o.loc, o.vendor, o.s, o.pr, o.amt, o.date]);
       const { csv, filename } = toCSV(headers, rows, 'westay-work-orders.csv');
       sendCSV(res, csv, filename);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

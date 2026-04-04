@@ -284,12 +284,16 @@ class SqliteAdapter extends DatabaseInterface {
   }
 
   async updateUser(id, updates) {
+    // Whitelist: only allow known user table columns to prevent SQL injection
+    const ALLOWED_COLUMNS = ['username', 'password', 'role', 'name', 'email', 'phone', 'linked_entity', 'last_login'];
     const sets = [];
     const vals = [];
     for (const [k, v] of Object.entries(updates)) {
+      if (!ALLOWED_COLUMNS.includes(k)) continue; // silently skip unknown columns
       sets.push(k + ' = ?');
       vals.push(v);
     }
+    if (sets.length === 0) return this.getUserById(id);
     vals.push(id);
     this.db.run(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, vals);
     this._save();

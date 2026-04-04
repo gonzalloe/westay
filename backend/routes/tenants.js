@@ -1,4 +1,4 @@
-// ============ TENANTS API ============
+﻿// ============ TENANTS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -19,7 +19,7 @@ module.exports = function(db) {
         tenants = await db.getAll('tenants');
       }
       res.json(paginate(tenants, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/tenants/:name
@@ -28,7 +28,7 @@ module.exports = function(db) {
       const t = await db.getById('tenants', decodeURIComponent(req.params.name));
       if (!t) return res.status(404).json({ error: 'Tenant not found' });
       res.json(t);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/tenants
@@ -48,7 +48,7 @@ module.exports = function(db) {
       };
       await db.create('tenants', tenant);
       res.status(201).json(tenant);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PUT /api/tenants/:name
@@ -57,7 +57,7 @@ module.exports = function(db) {
       const updated = await db.update('tenants', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Tenant not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/tenants/:name
@@ -66,7 +66,7 @@ module.exports = function(db) {
       const ok = await db.delete('tenants', decodeURIComponent(req.params.name));
       if (!ok) return res.status(404).json({ error: 'Tenant not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

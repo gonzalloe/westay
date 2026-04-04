@@ -1,4 +1,4 @@
-// ============ BILLS API ============
+﻿// ============ BILLS API ============
 const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
@@ -19,7 +19,7 @@ module.exports = function(db) {
         bills = await db.getAll('bills');
       }
       res.json(paginate(bills, req));
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/bills/:id
@@ -28,7 +28,7 @@ module.exports = function(db) {
       const b = await db.getById('bills', req.params.id);
       if (!b) return res.status(404).json({ error: 'Bill not found' });
       res.json(b);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/bills — Create bill
@@ -49,7 +49,7 @@ module.exports = function(db) {
       };
       await db.create('bills', bill);
       res.status(201).json(bill);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PUT /api/bills/:id
@@ -58,7 +58,7 @@ module.exports = function(db) {
       const updated = await db.update('bills', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Bill not found' });
       res.json(updated);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/bills/:id/pay — Pay a bill (with auto-reconnect logic)
@@ -96,7 +96,7 @@ module.exports = function(db) {
       }
 
       res.json(result);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/bills/generate — Generate invoices for all active tenants
@@ -120,7 +120,7 @@ module.exports = function(db) {
         }
       }
       res.json({ generated: count });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/bills/:id
@@ -129,7 +129,7 @@ module.exports = function(db) {
       const ok = await db.delete('bills', req.params.id);
       if (!ok) return res.status(404).json({ error: 'Bill not found' });
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;

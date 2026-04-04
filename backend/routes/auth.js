@@ -1,4 +1,4 @@
-// ============ AUTH API ============
+﻿// ============ AUTH API ============
 // POST /api/auth/login — Login with username/password, returns JWT
 // POST /api/auth/register — Create new account (admin only, or first user)
 // GET  /api/auth/me — Get current user profile
@@ -50,7 +50,7 @@ module.exports = function(db) {
           linked_entity: user.linked_entity
         }
       });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/auth/register — Admin creates new users
@@ -85,7 +85,7 @@ module.exports = function(db) {
         name: user.name, email: user.email, phone: user.phone,
         linked_entity: user.linked_entity
       });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/auth/me — Current user profile
@@ -98,7 +98,7 @@ module.exports = function(db) {
         name: user.name, email: user.email, phone: user.phone,
         linked_entity: user.linked_entity, created_at: user.created_at, last_login: user.last_login
       });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // PATCH /api/auth/password — Change own password
@@ -118,7 +118,7 @@ module.exports = function(db) {
       const hashedPassword = await bcrypt.hash(new_password, 10);
       await db.updateUser(req.user.id, { password: hashedPassword });
       res.json({ success: true, message: 'Password changed' });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // POST /api/auth/forgot-password — Reset password by username + email verification
@@ -142,14 +142,13 @@ module.exports = function(db) {
       const hashedPassword = await bcrypt.hash(tempPass, 10);
       await db.updateUser(user.id, { password: hashedPassword });
 
-      // In production, this would be emailed. For now, return it in response.
+      // In production, send via email. Never expose temp password in response.
+      // TODO: Wire up notification service to email the temp password
       res.json({
         success: true,
-        message: 'Password has been reset',
-        temp_password: tempPass,
-        note: 'Please change your password after logging in'
+        message: 'Password has been reset. If an email address is on file, a temporary password has been sent.'
       });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // GET /api/auth/users — List all users (admin only)
@@ -157,7 +156,7 @@ module.exports = function(db) {
     try {
       const users = await db.getAllUsers();
       res.json(users);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   // DELETE /api/auth/users/:id — Delete user (admin only)
@@ -168,7 +167,7 @@ module.exports = function(db) {
       }
       await db.deleteUser(parseInt(req.params.id));
       res.json({ success: true });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+    } catch(e) { res.status(500).json({ error: 'Internal server error' }); }
   });
 
   return router;
