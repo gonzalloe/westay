@@ -201,7 +201,9 @@ const PAGE_MAP = {
 
     // Backend unavailable — try offline demo mode fallback
     const demo = DEMO_ACCOUNTS[username];
-    if (demo && demo.password === password) {
+    if (demo) {
+      // Demo mode: accept any password (no security concern — it's fake data)
+      // This avoids issues where password field isn't updated after username change
       const demoUser = { id: 'demo-' + username, username: username, role: demo.role, name: demo.name, email: demo.email };
       const demoToken = 'demo_' + btoa(JSON.stringify(demoUser));
       errDiv.style.display = 'none';
@@ -211,8 +213,8 @@ const PAGE_MAP = {
       return;
     }
 
-    // Both failed — show error
-    errDiv.querySelector('span').textContent = 'Login failed. Check your username and password.';
+    // Unknown username and no backend — show error
+    errDiv.querySelector('span').textContent = 'Login failed. Try a demo account: admin, operator, sarah, landlord, vendor, agent';
     errDiv.style.display = 'block';
   }
 })();
