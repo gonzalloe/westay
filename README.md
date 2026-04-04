@@ -2,7 +2,7 @@
 
 > Frontend-only SPA for managing co-living properties, tenants, billing, IoT devices, and maintenance workflows.
 
-**Branch: `main`** — Frontend-only, deployed to [GitHub Pages](https://gonzalloe.github.io/westay/) for stakeholder demo.
+**Branch: `demo`** — Frontend-only, deployed to [GitHub Pages](https://gonzalloe.github.io/westay/) for stakeholder demo.
 **Branch: `backend-dev`** — Full-stack version with Express 5 + SQLite + JWT Auth backend. See that branch's README for backend details.
 
 ---
@@ -18,7 +18,7 @@
 - [Data Entities (22 types)](#data-entities-22-types)
 - [Key Features](#key-features)
 - [Security & Utilities](#security--utilities)
-- [How to Merge `backend-dev` into `main`](#how-to-merge-backend-dev-into-main)
+- [How to Merge `backend-dev` into `demo`](#how-to-merge-backend-dev-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
 - [Development Notes](#development-notes)
@@ -319,20 +319,20 @@ All data is demo/seed data. On first load, localStorage is empty and in-memory a
 
 ---
 
-## How to Merge `backend-dev` into `main`
+## How to Merge `backend-dev` into `demo`
 
-When the backend is ready for production, merge `backend-dev` into `main`:
+When the backend is ready for production, merge `backend-dev` into `demo`:
 
 ```bash
-# Make sure you're on main
-git checkout main
+# Make sure you're on demo
+git checkout demo
 
 # Merge backend-dev
 git merge backend-dev
 
 # Resolve any conflicts (README.md will conflict — keep backend-dev version)
 # Then push
-git push origin main
+git push origin demo
 ```
 
 ### Post-Merge Checklist
@@ -395,8 +395,8 @@ The `backend-dev` branch uses a **Repository/Adapter pattern**. To swap the data
 
 | Feature | Details |
 |---|---|
-| **Real Authentication** | Main branch uses fake login (any credentials work). `backend-dev` has real JWT auth. Merge needed. |
-| **Real Server** | Main branch is frontend-only. Needs `backend-dev` merge + deployment. |
+| **Real Authentication** | Demo branch uses fake login (any credentials work). `backend-dev` has real JWT auth. Merge needed. |
+| **Real Server** | Demo branch is frontend-only. Needs `backend-dev` merge + deployment. |
 | **Environment Variables** | Hardcoded JWT secret in backend. Need `dotenv` for secrets. |
 | **Input Validation** | No validation library (e.g., Joi, Zod). Route handlers do minimal checks. |
 | **HTTPS** | No SSL/TLS. Required for production. Use reverse proxy (Nginx) or hosting platform. |
@@ -448,7 +448,7 @@ The `backend-dev` branch uses a **Repository/Adapter pattern**. To swap the data
 | `vendor` | `vendor123` | Vendor — AirCool Services |
 | `agent` | `agent123` | Agent |
 
-(On `main` branch, any credentials work — demo mode.)
+(On `demo` branch, any credentials work — demo mode.)
 
 ### 8 Properties (Malaysia — Kampar, Perak)
 
