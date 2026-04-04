@@ -198,6 +198,65 @@ describe('i18n Engine', () => {
   });
 });
 
+// ---- Auth Middleware (requireRole) ----
+
+describe('Auth Middleware - requireRole', () => {
+  const { requireRole } = require('../backend/middleware/auth');
+
+  function mockReqRes(role) {
+    return {
+      req: { user: { id: 'u-1', username: 'test', role } },
+      res: {
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        json(data) { this.data = data; return this; }
+      }
+    };
+  }
+
+  test('admin passes admin-only check', () => {
+    const mw = requireRole('admin');
+    const { req, res } = mockReqRes('admin');
+    let passed = false;
+    mw(req, res, () => { passed = true; });
+    expect(passed).toBe(true);
+  });
+
+  test('operator fails admin-only check', () => {
+    const mw = requireRole('admin');
+    const { req, res } = mockReqRes('operator');
+    let passed = false;
+    mw(req, res, () => { passed = true; });
+    expect(passed).toBe(false);
+    expect(res.statusCode).toBe(403);
+  });
+
+  test('operator passes admin+operator check', () => {
+    const mw = requireRole('admin', 'operator');
+    const { req, res } = mockReqRes('operator');
+    let passed = false;
+    mw(req, res, () => { passed = true; });
+    expect(passed).toBe(true);
+  });
+
+  test('admin passes admin+operator check', () => {
+    const mw = requireRole('admin', 'operator');
+    const { req, res } = mockReqRes('admin');
+    let passed = false;
+    mw(req, res, () => { passed = true; });
+    expect(passed).toBe(true);
+  });
+
+  test('tenant fails admin+operator check', () => {
+    const mw = requireRole('admin', 'operator');
+    const { req, res } = mockReqRes('tenant');
+    let passed = false;
+    mw(req, res, () => { passed = true; });
+    expect(passed).toBe(false);
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 // ---- Audit Middleware ----
 
 describe('Audit Log', () => {

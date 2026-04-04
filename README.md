@@ -59,6 +59,7 @@ Copy `.env.example` to `.env` and configure:
 | `DB_PATH` | No | SQLite file path (default: `backend/data/westay.db`) |
 | `CORS_ORIGIN` | No | Allowed CORS origins (default: `*`) |
 | `STRIPE_SECRET_KEY` | No | Stripe API key for payments |
+| `STRIPE_PUBLISHABLE_KEY` | No | Stripe publishable key (for frontend Stripe.js) |
 | `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No | Email (Nodemailer) config |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | No | WhatsApp Cloud API config |
@@ -82,7 +83,7 @@ See `.env.example` for the full list.
 | **File Upload** | multer (local storage, MIME filtering) |
 | **HTTPS** | SSL/TLS with auto-redirect + self-signed cert generation |
 | **Logging** | Custom structured logging (file rotation: app.log, error.log, http.log) |
-| **Testing** | Jest 30 (100 tests across 4 suites) |
+| **Testing** | Jest 30 (106 tests across 4 suites) |
 | **i18n** | Built-in (English, Malay, Chinese) |
 | **Real-Time** | WebSocket (native, no socket.io) |
 
@@ -122,7 +123,7 @@ project-root/
 │   │   ├── memory-adapter.js   # In-memory implementation (dev/test)
 │   │   ├── index.js            # Adapter factory (swap DB here)
 │   │   ├── seed.js             # Demo data (16+ entities)
-│   │   └── seed-users.js       # 5 default user accounts
+│   │   └── seed-users.js       # 6 default user accounts
 │   ├── middleware/
 │   │   ├── auth.js             # JWT verify + role-based access control
 │   │   ├── validate.js         # Input validation + XSS sanitization
@@ -242,11 +243,11 @@ Two data paradigms:
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/api/auth/login` | Public | Login, returns JWT |
-| POST | `/api/auth/register` | Operator only | Create new user |
+| POST | `/api/auth/register` | Admin only | Create new user |
 | GET | `/api/auth/me` | Authenticated | Current user profile |
 | PATCH | `/api/auth/password` | Authenticated | Change own password |
-| GET | `/api/auth/users` | Operator only | List all users |
-| DELETE | `/api/auth/users/:id` | Operator only | Delete user |
+| GET | `/api/auth/users` | Admin only | List all users |
+| DELETE | `/api/auth/users/:id` | Admin only | Delete user |
 
 ### Properties (`/api/props`) — 5 endpoints
 
@@ -254,9 +255,9 @@ Two data paradigms:
 |---|---|---|---|
 | GET | `/api/props` | Authenticated | List all properties |
 | GET | `/api/props/:name` | Authenticated | Get by name |
-| POST | `/api/props` | Operator only | Create property |
-| PUT | `/api/props/:name` | Operator only | Update property |
-| DELETE | `/api/props/:name` | Operator only | Delete property |
+| POST | `/api/props` | Admin/Operator | Create property |
+| PUT | `/api/props/:name` | Admin/Operator | Update property |
+| DELETE | `/api/props/:name` | Admin/Operator | Delete property |
 
 ### Tenants (`/api/tenants`) — 5 endpoints
 
@@ -319,12 +320,12 @@ Two data paradigms:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/leads` | Operator/Agent | List all |
-| GET | `/api/leads/:name` | Operator/Agent | Get by name |
-| POST | `/api/leads` | Operator/Agent | Create lead |
-| PUT | `/api/leads/:name` | Operator/Agent | Update lead |
-| PATCH | `/api/leads/:name/status` | Operator/Agent | Update status |
-| DELETE | `/api/leads/:name` | Operator/Agent | Delete lead |
+| GET | `/api/leads` | Admin/Operator/Agent | List all |
+| GET | `/api/leads/:name` | Admin/Operator/Agent | Get by name |
+| POST | `/api/leads` | Admin/Operator/Agent | Create lead |
+| PUT | `/api/leads/:name` | Admin/Operator/Agent | Update lead |
+| PATCH | `/api/leads/:name/status` | Admin/Operator/Agent | Update status |
+| DELETE | `/api/leads/:name` | Admin/Operator/Agent | Delete lead |
 
 ### Landlords (`/api/landlords`) — 6 endpoints
 
@@ -407,9 +408,9 @@ Two data paradigms:
 | GET | `/api/misc/config/:key` | Authenticated | Get config entry |
 | GET | `/api/misc/property-expenses` | Authenticated | All property expenses |
 | PUT | `/api/misc/property-expenses/:prop` | Authenticated | Set expenses |
-| POST | `/api/misc/reset` | Operator only | Reset all data to demo |
+| POST | `/api/misc/reset` | Admin only | Reset all data to demo |
 | GET | `/api/misc/all-data` | Authenticated | Bulk fetch (21 collections) |
-| POST | `/api/misc/save-data` | Operator only | Bulk save |
+| POST | `/api/misc/save-data` | Admin only | Bulk save |
 
 ### Payments (`/api/payments`) — 5 endpoints
 
@@ -417,7 +418,7 @@ Two data paradigms:
 |---|---|---|---|
 | POST | `/api/payments/create-intent` | Authenticated | Create Stripe PaymentIntent (FPX, card, or GrabPay) |
 | POST | `/api/payments/confirm` | Authenticated | Confirm payment + update bill status |
-| POST | `/api/payments/refund` | Operator only | Refund a payment |
+| POST | `/api/payments/refund` | Authenticated | Refund a payment |
 | GET | `/api/payments/status/:intentId` | Authenticated | Check payment status |
 | POST | `/api/payments/webhook` | Public (Stripe) | Stripe webhook handler (signature verified) |
 
@@ -449,9 +450,9 @@ Two data paradigms:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/audit` | Operator only | Query audit logs (`?action=create&entity=props&from=2026-04-01&limit=100`) |
-| GET | `/api/audit/stats` | Operator only | Aggregated audit statistics (by action, entity, user, time) |
-| GET | `/api/audit/export` | Operator only | Export audit logs as CSV |
+| GET | `/api/audit` | Admin only | Query audit logs (`?action=create&entity=props&from=2026-04-01&limit=100`) |
+| GET | `/api/audit/stats` | Admin only | Aggregated audit statistics (by action, entity, user, time) |
+| GET | `/api/audit/export` | Admin only | Export audit logs as CSV |
 
 ### API Documentation (`/api/docs`) — 2 endpoints
 
@@ -490,6 +491,7 @@ Real-time event broadcasting. Connect via WebSocket, authenticate with JWT.
 2. **Use token**: Include `Authorization: Bearer <token>` header on all subsequent requests
 3. **Token expiry**: 7 days
 4. **Password storage**: bcrypt hashed (cost factor 10)
+5. **Demo mode**: When backend is unreachable (GitHub Pages), login uses hardcoded demo credentials with a `demo_` token prefix and switches to localStorage-only mode
 
 ### Middleware
 
@@ -499,15 +501,182 @@ Real-time event broadcasting. Connect via WebSocket, authenticate with JWT.
 | `requireRole(...roles)` | Checks `req.user.role` against allowed roles, returns 403 if denied |
 | `optionalAuth` | Sets `req.user` if valid token present, proceeds regardless |
 
-### 5 User Roles
+### 6 User Roles — Overview
 
 | Role | Pages | Access Level |
 |---|---|---|
-| `operator` | 14 | Full access to everything (admin) |
-| `tenant` | 10 | View own data, submit tickets, view bills |
-| `landlord` | 7 | View own properties, reports, bills |
-| `vendor` | 7 | View assigned work orders, update status |
-| `agent` | 8 | Manage leads/prospects |
+| `admin` | 16 | Full access: everything operator has + user management, audit log, data reset, bulk save |
+| `operator` | 14 | Routine operations: properties, tenants, billing, maintenance, IoT, leads, reports, settings (no destructive actions) |
+| `tenant` | 10 | View own data, submit tickets, view/pay bills, smart access, utilities, community |
+| `landlord` | 7 | View own properties, financials, tenancy overview, maintenance log, payouts, reports |
+| `vendor` | 7 | View assigned work orders, schedule, submit invoices, manage company profile |
+| `agent` | 8 | Manage leads/prospects, listings, viewings, applications, commission tracking |
+
+---
+
+### 🔴 Admin (16 pages)
+
+**Everything the Operator can do, plus:**
+
+| Exclusive Capability | Frontend Page | Backend Endpoint |
+|---|---|---|
+| **User Management** — Create, list, delete user accounts of any role | `users` page | `POST /api/auth/register`, `GET /api/auth/users`, `DELETE /api/auth/users/:id` |
+| **Audit Log** — View, filter, and export all system activity (create/update/delete/login events) | `audit` page | `GET /api/audit`, `GET /api/audit/stats`, `GET /api/audit/export` |
+| **Reset Demo Data** — Destructive wipe of all data back to demo state | `settings` page (button) | `POST /api/misc/reset` |
+| **Bulk Save Data** — Overwrite all collections at once | API only | `POST /api/misc/save-data` |
+| **WebSocket Status** — Monitor connected clients and authenticated users | API only | `GET /api/ws/status` |
+
+**Pages:** Dashboard, Properties, Tenants, Landlords, Contracts, Billing & Invoices, Maintenance, Vendors, IoT & Smart Locks, Leads & CRM, Community, AI Insights, Reports & Analytics, Admin Settings, User Management, Audit Log
+
+**Quick Actions:** Add Property, Add Tenant, New Ticket, New Contract, Add Vendor, Add Lead, User Management, Automation Center, Generate Report, Generate TA, Owner Report, Utility Bills, Check-In/Out
+
+---
+
+### 🟣 Operator (14 pages)
+
+Day-to-day operations manager. Same pages as Admin **except** no User Management, no Audit Log, and Settings page has non-destructive data export only (no data reset).
+
+| Capability | Details |
+|---|---|
+| **Property Management** | Full CRUD — add, edit, delete properties |
+| **Tenant Management** | Full CRUD — add, edit, view tenants, check-in/out inspections |
+| **Billing & Invoicing** | Create, manage, pay bills, generate invoices, utility bill management |
+| **Maintenance** | Full ticket lifecycle — create, assign, update status, manage photos |
+| **Vendor Management** | Full CRUD — add, manage vendors |
+| **IoT & Smart Locks** | Manage electric meters (cut/reconnect), smart lock fingerprints (enable/disable), view physical lock status |
+| **Leads & CRM** | Full lead pipeline — add, update status, convert |
+| **Contracts** | Full CRUD — create, e-sign, auto-generate tenancy agreements |
+| **Landlord Management** | View landlords, generate owner reports, export data |
+| **Reports** | Portfolio analytics, CSV export (tenants, bills, tickets, work orders) |
+| **Notifications** | Send bulk rent reminders (email + WhatsApp + in-app) |
+| **Automations** | Toggle auto-report, auto-TA, smart lock expiry, late payment electric cut |
+| **Community** | Manage community feed |
+| **AI Insights** | Dynamic pricing, tenant risk scoring, predictive maintenance |
+
+**Pages:** Dashboard, Properties, Tenants, Landlords, Contracts, Billing & Invoices, Maintenance, Vendors, IoT & Smart Locks, Leads & CRM, Community, AI Insights, Reports & Analytics, Settings
+
+**Quick Actions:** Same as Admin except no User Management
+
+---
+
+### 🟢 Tenant (10 pages)
+
+Self-service portal for tenants. Can only view/manage their own data.
+
+| Capability | Details |
+|---|---|
+| **Dashboard** | Personal overview — rent due, days remaining, open requests, community score |
+| **My Unit** | View unit details (property, room, floor, size, move-in date, deposits) |
+| **My Bills** | View rent + utility bills, pay via payment gateway (FPX, card, e-wallet), export, preview report |
+| **My Contract** | View tenancy agreement, download TA |
+| **Maintenance** | Submit new maintenance requests, track ticket status |
+| **Smart Access** | View door lock status, access log |
+| **Utilities** | View electric/water meter readings, check sub-meter connection status |
+| **Community** | Read/post in community feed |
+| **Events** | View community events |
+| **Marketplace** | Browse marketplace (coming soon) |
+
+**Quick Actions:** New Maintenance Request, Pay Rent, Utility Bills, My Check-In/Out Photos
+
+---
+
+### 🩷 Landlord (7 pages)
+
+Property owner portal. Views filtered to own properties only.
+
+| Capability | Details |
+|---|---|
+| **Portfolio Dashboard** | Overview — property count, total units, occupancy, revenue, estimated payout |
+| **My Properties** | View own properties with occupancy and performance stats |
+| **Financials** | Revenue breakdown — gross revenue, management fee (20%), net payout, payout history |
+| **Tenancy Overview** | View tenants in own properties — name, unit, rent, status, lease end |
+| **Maintenance Log** | View maintenance tickets on own properties |
+| **Payouts** | Payout history and financial details |
+| **Reports** | Owner monthly report (auto-generated, retained 6 months), revenue/occupancy/maintenance/NPS reports, CSV export |
+
+**Quick Actions:** My Owner Report
+
+---
+
+### 🟩 Vendor (7 pages)
+
+Service provider portal for maintenance vendors.
+
+| Capability | Details |
+|---|---|
+| **Dashboard** | Work overview — total work orders, pending, in progress, rating |
+| **Work Orders** | View assigned work orders, update status (Pending → In Progress → Completed) |
+| **Schedule** | View upcoming job schedule |
+| **My Invoices** | View submitted invoices, submit new invoices |
+| **Payments** | Payment tracking for completed jobs |
+| **Company Profile** | View/edit company details — registration, contact, specialty, rating |
+| **Reviews & Ratings** | View client reviews and ratings |
+
+**Quick Actions:** Submit Invoice
+
+---
+
+### 🟡 Agent (8 pages)
+
+Real estate agent portal for lead management and property leasing.
+
+| Capability | Details |
+|---|---|
+| **Dashboard** | Sales overview — active leads, viewings this week, applications, MTD commission |
+| **My Leads** | Full lead pipeline — add, update status (New → Contacted → Viewing → Negotiating → Converted), export |
+| **Available Listings** | Browse vacant units across all properties, share listing links |
+| **Viewings** | Manage property viewing appointments |
+| **Applications** | Review and approve/reject tenant applications |
+| **Commission** | View commission history — monthly, YTD, deals closed |
+| **Contacts** | Contact management (coming soon) |
+| **Performance** | Agent metrics — team rank, conversion rate, response time, client rating |
+
+**Quick Actions:** Add Lead
+
+---
+
+### Role Capability Matrix
+
+| Capability | Admin | Operator | Tenant | Landlord | Vendor | Agent |
+|---|---|---|---|---|---|---|
+| Properties (CRUD) | ✅ Full | ✅ Full | ❌ | 👁 Own only | ❌ | 👁 Listings |
+| Tenants (CRUD) | ✅ Full | ✅ Full | 👁 Own data | 👁 Own tenants | ❌ | ❌ |
+| Billing | ✅ Manage all | ✅ Manage all | 💳 View/pay own | ❌ | ❌ | ❌ |
+| Maintenance | ✅ Full | ✅ Full | ✏️ Create/view own | 👁 Own properties | ❌ | ❌ |
+| Vendors | ✅ Full | ✅ Full | ❌ | ❌ | 👁 Own profile | ❌ |
+| Work Orders | ✅ Full | ✅ Full | ❌ | ❌ | ✏️ Update status | ❌ |
+| IoT & Smart Locks | ✅ Full | ✅ Full | 👁 Own access | ❌ | ❌ | ❌ |
+| Leads & CRM | ✅ Full | ✅ Full | ❌ | ❌ | ❌ | ✅ Full |
+| Contracts | ✅ Full | ✅ Full | 👁 Own contract | ❌ | ❌ | ❌ |
+| Reports & Export | ✅ Full | ✅ Full | ❌ | 👁 Own reports | ❌ | ❌ |
+| Community | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| AI Insights | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Payments (Stripe) | ✅ Manage | ✅ Manage | 💳 Pay own bills | ❌ | ❌ | ❌ |
+| Notifications (bulk) | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **User Management** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Audit Log** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Data Reset** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Bulk Data Save** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+### Backend API Access by Role
+
+| API Route | Public | Admin | Operator | Tenant | Landlord | Vendor | Agent |
+|---|---|---|---|---|---|---|---|
+| `POST /api/auth/login` | ✅ | — | — | — | — | — | — |
+| `POST /api/auth/register` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `GET /api/auth/me` | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `GET /api/auth/users` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `DELETE /api/auth/users/:id` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `POST/PUT/DELETE /api/props` | | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `GET /api/props` | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/leads/*` | | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| `/api/audit/*` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `POST /api/misc/reset` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `POST /api/misc/save-data` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `GET /api/ws/status` | | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `/api/docs/*` | ✅ | — | — | — | — | — | — |
+| `/api/i18n/*` | ✅ | — | — | — | — | — | — |
+| All other CRUD routes | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -649,7 +818,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-**100 tests** across 4 suites:
+**106 tests** across 4 suites:
 
 | Suite | Tests | Coverage |
 |---|---|---|
@@ -713,7 +882,7 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 | SQLite Database | v1.0 | Persistent, auto-seed, repository pattern |
 | In-Memory DB | v1.0 | Available as alternative adapter |
 | JWT Authentication | v1.0 | Login, register, token refresh via 7-day expiry |
-| Role-Based Access | v1.0 | 5 roles (46 total page routes), per-route middleware enforcement |
+| Role-Based Access | v1.0 | 6 roles (62 total page routes), per-route middleware enforcement |
 | Password Security | v1.0 | async bcrypt hashed, min 6 chars, change password endpoint |
 | Property Management | v1.0 | Full CRUD |
 | Tenant Management | v1.0 | Full CRUD + status tracking |
@@ -752,7 +921,9 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 | **Email Notifications** | **v1.3** | **Nodemailer with HTML templates, rent reminders, bulk reminders** |
 | **WhatsApp Notifications** | **v1.3** | **WhatsApp Cloud API integration for tenant messaging** |
 | **Structured Logging** | **v1.3** | **Custom logger with file rotation (app.log, error.log, http.log)** |
-| **Test Suite** | **v1.3** | **100 tests across 4 suites (Jest 30) — DB, API, middleware, services** |
+| **Test Suite** | **v1.3** | **106 tests across 4 suites (Jest 30) — DB, API, middleware, services** |
+| **Demo Mode Login** | **v1.4** | **Offline login fallback for GitHub Pages — hardcoded demo credentials, `demo_` token, localStorage-only mode** |
+| **Stripe Frontend Integration** | **v1.4** | **Frontend payment gateway wired to backend Stripe API (FPX bank redirect, card, GrabPay), simulation fallback** |
 
 ---
 
@@ -786,7 +957,8 @@ These are configuration/deployment concerns, not missing code:
 
 | Username | Password | Role | Linked Entity |
 |---|---|---|---|
-| `operator` | `op123456` | Operator (Admin) | — |
+| `admin` | `admin123456` | Admin (System Admin) | — |
+| `operator` | `op123456` | Operator (Site Operator) | — |
 | `sarah` | `tenant123` | Tenant | Sarah Lim |
 | `landlord` | `landlord123` | Landlord | Dato Lee Wei |
 | `vendor` | `vendor123` | Vendor | AirCool Services |

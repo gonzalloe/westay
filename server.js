@@ -141,13 +141,13 @@ app.use('/api', async (req, res, next) => {
   // Role restrictions are applied per-route.
   // ==========================================
 
-  // --- Properties: operator full CRUD, others read-only ---
+  // --- Properties: admin/operator full CRUD, others read-only ---
   const propsRouter = require('./backend/routes/props')(db);
   app.get('/api/props', authenticate, propsRouter);
   app.get('/api/props/:name', authenticate, propsRouter);
-  app.post('/api/props', authenticate, requireRole('operator'), propsRouter);
-  app.put('/api/props/:name', authenticate, requireRole('operator'), propsRouter);
-  app.delete('/api/props/:name', authenticate, requireRole('operator'), propsRouter);
+  app.post('/api/props', authenticate, requireRole('admin', 'operator'), propsRouter);
+  app.put('/api/props/:name', authenticate, requireRole('admin', 'operator'), propsRouter);
+  app.delete('/api/props/:name', authenticate, requireRole('admin', 'operator'), propsRouter);
   // Fallback mount for any missed sub-routes
   app.use('/api/props', authenticate, propsRouter);
 
@@ -171,9 +171,9 @@ app.use('/api', async (req, res, next) => {
   const workOrdersRouter = require('./backend/routes/work-orders')(db);
   app.use('/api/work-orders', authenticate, workOrdersRouter);
 
-  // --- Leads: operator/agent access ---
+  // --- Leads: admin/operator/agent access ---
   const leadsRouter = require('./backend/routes/leads')(db);
-  app.use('/api/leads', authenticate, requireRole('operator', 'agent'), leadsRouter);
+  app.use('/api/leads', authenticate, requireRole('admin', 'operator', 'agent'), leadsRouter);
 
   // --- Landlords: operator/landlord access ---
   const landlordsRouter = require('./backend/routes/landlords')(db);
@@ -207,12 +207,12 @@ app.use('/api', async (req, res, next) => {
   const notificationsRouter = require('./backend/routes/notifications')(db);
   app.use('/api/notifications', authenticate, notificationsRouter);
 
-  // --- Audit: operator only ---
+  // --- Audit: admin only ---
   const auditRouter = require('./backend/routes/audit')(db);
-  app.use('/api/audit', authenticate, requireRole('operator'), auditRouter);
+  app.use('/api/audit', authenticate, requireRole('admin'), auditRouter);
 
   // --- WebSocket status endpoint ---
-  app.get('/api/ws/status', authenticate, requireRole('operator'), (req, res) => {
+  app.get('/api/ws/status', authenticate, requireRole('admin'), (req, res) => {
     res.json({
       connectedClients: getClientCount(),
       authenticatedUsers: getConnectedUsers()
@@ -298,10 +298,11 @@ function printStartupBanner(protocol) {
   console.log('  ===================================');
   console.log('');
   console.log('  Default Accounts:');
-  console.log('    operator / op123456     (full access)');
-  console.log('    sarah    / tenant123    (tenant - Sarah Lim)');
-  console.log('    landlord / landlord123  (landlord - Dato Lee Wei)');
-  console.log('    vendor   / vendor123    (vendor - AirCool Services)');
-  console.log('    agent    / agent123     (agent)');
+  console.log('    admin    / admin123456   (system admin — full access)');
+  console.log('    operator / op123456      (operator — routine operations)');
+  console.log('    sarah    / tenant123     (tenant - Sarah Lim)');
+  console.log('    landlord / landlord123   (landlord - Dato Lee Wei)');
+  console.log('    vendor   / vendor123     (vendor - AirCool Services)');
+  console.log('    agent    / agent123      (agent)');
   console.log('');
 }

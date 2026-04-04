@@ -39,7 +39,7 @@ module.exports = function(db) {
         id: 'CIO-' + String(all.length + 1).padStart(3, '0'),
         tenant, unit: unit || '', type: type || 'check-in',
         date: new Date().toISOString().slice(0, 10),
-        inspector: inspector || 'Admin Operator',
+        inspector: inspector || 'Site Operator',
         status: 'In Progress', notes: notes || '', photos: photos || []
       };
       await db.create('checkinout_records', record);
@@ -160,8 +160,8 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // ========== DATA RESET (OPERATOR ONLY — destructive) ==========
-  router.post('/reset', requireRole('operator'), async (req, res) => {
+  // ========== DATA RESET (ADMIN ONLY — destructive) ==========
+  router.post('/reset', requireRole('admin'), async (req, res) => {
     try {
       const seed = require('../db/seed');
       const seedUsers = require('../db/seed-users');
@@ -205,8 +205,8 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // ========== BULK SAVE (OPERATOR ONLY — destructive) ==========
-  router.post('/save-data', requireRole('operator'), async (req, res) => {
+  // ========== BULK SAVE (ADMIN ONLY — destructive) ==========
+  router.post('/save-data', requireRole('admin'), async (req, res) => {
     try {
       const d = req.body;
       const mapping = {

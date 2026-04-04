@@ -1,12 +1,47 @@
 // ============ ROLE CONFIGURATION ============
 
 const ROLE_CONFIG = {
+  admin: {
+    label: 'Admin',
+    color: '#E84393',
+    bg: 'rgba(232,67,147,.12)',
+    icon: 'fa-shield-alt',
+    user: { name: 'System Admin', email: 'admin@westay.my', initials: 'SA' },
+    nav: [
+      { section: 'MAIN', items: [
+        { id:'dashboard', icon:'fa-th-large', label:'Dashboard', badge:null },
+        { id:'properties', icon:'fa-building', label:'Properties', badge:null },
+        { id:'tenants', icon:'fa-users', label:'Tenants', badge:'342' },
+        { id:'landlords', icon:'fa-user-tie', label:'Landlords', badge:String(LANDLORDS.length) },
+        { id:'contracts', icon:'fa-file-contract', label:'Contracts', badge:'4' }
+      ]},
+      { section: 'OPERATIONS', items: [
+        { id:'billing', icon:'fa-file-invoice-dollar', label:'Billing & Invoices', badge:'30' },
+        { id:'maintenance', icon:'fa-wrench', label:'Maintenance', badge:'5' },
+        { id:'vendors', icon:'fa-tools', label:'Vendors', badge:null },
+        { id:'iot', icon:'fa-microchip', label:'IoT & Smart Locks', badge:null }
+      ]},
+      { section: 'GROWTH', items: [
+        { id:'leads', icon:'fa-funnel-dollar', label:'Leads & CRM', badge:'5' },
+        { id:'community', icon:'fa-comments', label:'Community', badge:null },
+        { id:'ai', icon:'fa-brain', label:'AI Insights', badge:null }
+      ]},
+      { section: 'REPORTS', items: [
+        { id:'reports', icon:'fa-chart-bar', label:'Reports & Analytics', badge:null },
+        { id:'settings', icon:'fa-cog', label:'Settings', badge:null }
+      ]},
+      { section: 'ADMIN', items: [
+        { id:'users', icon:'fa-users-cog', label:'User Management', badge:null },
+        { id:'audit', icon:'fa-history', label:'Audit Log', badge:null }
+      ]}
+    ]
+  },
   operator: {
     label: 'Operator',
     color: '#6C5CE7',
     bg: 'rgba(108,92,231,.12)',
     icon: 'fa-cogs',
-    user: { name: 'Admin Operator', email: 'admin@westay.my', initials: 'AO' },
+    user: { name: 'Site Operator', email: 'operator@westay.my', initials: 'SO' },
     nav: [
       { section: 'MAIN', items: [
         { id:'dashboard', icon:'fa-th-large', label:'Dashboard', badge:null },

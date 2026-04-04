@@ -87,7 +87,7 @@ const spec = {
             properties: {
               id: { type: 'integer' },
               username: { type: 'string' },
-              role: { type: 'string', enum: ['operator', 'tenant', 'landlord', 'vendor', 'agent'] },
+              role: { type: 'string', enum: ['admin', 'operator', 'tenant', 'landlord', 'vendor', 'agent'] },
               name: { type: 'string' }
             }
           }
@@ -172,8 +172,8 @@ const spec = {
     '/auth/register': {
       post: {
         tags: ['Auth'], summary: 'Register new user', operationId: 'register', security: [{ BearerAuth: [] }],
-        description: 'Create a new user account. Operator only.',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['username', 'password', 'name'], properties: { username: { type: 'string' }, password: { type: 'string', minLength: 6 }, name: { type: 'string' }, role: { type: 'string', enum: ['operator', 'tenant', 'landlord', 'vendor', 'agent'] }, email: { type: 'string' }, phone: { type: 'string' } } } } } },
+        description: 'Create a new user account. Admin only.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['username', 'password', 'name'], properties: { username: { type: 'string' }, password: { type: 'string', minLength: 6 }, name: { type: 'string' }, role: { type: 'string', enum: ['admin', 'operator', 'tenant', 'landlord', 'vendor', 'agent'] }, email: { type: 'string' }, phone: { type: 'string' } } } } } },
         responses: { 201: { description: 'User created' }, 409: { description: 'Username exists' } }
       }
     },
@@ -184,14 +184,14 @@ const spec = {
       patch: { tags: ['Auth'], summary: 'Change password', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Password changed' } } }
     },
     '/auth/users': {
-      get: { tags: ['Auth'], summary: 'List all users (operator only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'User list' } } }
+      get: { tags: ['Auth'], summary: 'List all users (admin only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'User list' } } }
     },
     '/auth/users/{id}': {
-      delete: { tags: ['Auth'], summary: 'Delete user (operator only)', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Deleted' } } }
+      delete: { tags: ['Auth'], summary: 'Delete user (admin only)', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Deleted' } } }
     },
 
     // ---- CRUD pattern (Properties, Tenants, etc.) ----
-    '/props': { get: { tags: ['Properties'], summary: 'List all properties', security: [{ BearerAuth: [] }], parameters: [], responses: { 200: { description: 'Property list' } } }, post: { tags: ['Properties'], summary: 'Create property (operator only)', security: [{ BearerAuth: [] }], responses: { 201: { description: 'Created' } } } },
+    '/props': { get: { tags: ['Properties'], summary: 'List all properties', security: [{ BearerAuth: [] }], parameters: [], responses: { 200: { description: 'Property list' } } }, post: { tags: ['Properties'], summary: 'Create property (admin/operator)', security: [{ BearerAuth: [] }], responses: { 201: { description: 'Created' } } } },
     '/props/{name}': { get: { tags: ['Properties'], summary: 'Get property by name', security: [{ BearerAuth: [] }], parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Property' } } }, put: { tags: ['Properties'], summary: 'Update property', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Updated' } } }, delete: { tags: ['Properties'], summary: 'Delete property', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Deleted' } } } },
 
     '/tenants': { get: { tags: ['Tenants'], summary: 'List tenants (?status=active&prop=Cambridge)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Tenant list' } } }, post: { tags: ['Tenants'], summary: 'Create tenant', security: [{ BearerAuth: [] }], responses: { 201: { description: 'Created' } } } },
@@ -234,8 +234,8 @@ const spec = {
     '/misc/automations': { get: { tags: ['Misc'], summary: 'List automations', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Automation list' } } } },
     '/misc/automations/{key}/toggle': { patch: { tags: ['Misc'], summary: 'Toggle automation on/off', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Toggled' } } } },
     '/misc/all-data': { get: { tags: ['Misc'], summary: 'Bulk fetch all data (21 collections)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'All data' } } } },
-    '/misc/reset': { post: { tags: ['Misc'], summary: 'Reset all data to demo (operator only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Data reset' } } } },
-    '/misc/save-data': { post: { tags: ['Misc'], summary: 'Bulk save data (operator only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Saved' } } } },
+    '/misc/reset': { post: { tags: ['Misc'], summary: 'Reset all data to demo (admin only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Data reset' } } } },
+    '/misc/save-data': { post: { tags: ['Misc'], summary: 'Bulk save data (admin only)', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Saved' } } } },
 
     // ---- Reports ----
     '/reports/owner/{name}': { get: { tags: ['Reports'], summary: 'Owner report JSON', security: [{ BearerAuth: [] }], parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Owner report' } } } },
@@ -248,7 +248,7 @@ const spec = {
     '/reports/work-orders/csv': { get: { tags: ['Reports'], summary: 'Export work orders as CSV', security: [{ BearerAuth: [] }], responses: { 200: { description: 'CSV file' } } } },
 
     // ---- Audit ----
-    '/audit': { get: { tags: ['Audit'], summary: 'Query audit logs (?action=create&entity=props&from=2026-04-01)', security: [{ BearerAuth: [] }], description: 'Operator only. Supports filters: action, entity, userId, username, from, to, limit.', responses: { 200: { description: 'Audit log entries' } } } },
+    '/audit': { get: { tags: ['Audit'], summary: 'Query audit logs (?action=create&entity=props&from=2026-04-01)', security: [{ BearerAuth: [] }], description: 'Admin only. Supports filters: action, entity, userId, username, from, to, limit.', responses: { 200: { description: 'Audit log entries' } } } },
     '/audit/stats': { get: { tags: ['Audit'], summary: 'Audit log statistics', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Aggregated stats' } } } },
     '/audit/export': { get: { tags: ['Audit'], summary: 'Export audit logs as CSV', security: [{ BearerAuth: [] }], responses: { 200: { description: 'CSV file' } } } },
 
@@ -312,7 +312,7 @@ module.exports = function () {
   <div class="container">
     <div class="stats" id="stats"></div>
     <div class="info-box">
-      <strong>Authentication:</strong> POST <code>/api/auth/login</code> with <code>{"username":"operator","password":"op123456"}</code> to get a JWT token.
+      <strong>Authentication:</strong> POST <code>/api/auth/login</code> with <code>{"username":"admin","password":"admin123456"}</code> to get a JWT token.
       Include <code>Authorization: Bearer &lt;token&gt;</code> header on all subsequent requests.<br>
       <strong>Pagination:</strong> Add <code>?page=1&limit=50</code> to any list endpoint. Without <code>page</code>, returns raw array.<br>
       <strong>Language:</strong> Add <code>?lang=ms</code> or <code>?lang=zh</code> for Malay/Chinese error messages. Also respects <code>Accept-Language</code> header.<br>
@@ -337,7 +337,7 @@ module.exports = function () {
       }
       statsEl.innerHTML='<div class="stat"><div class="stat-num">'+totalEndpoints+'</div><div class="stat-label">Endpoints</div></div>'
         +'<div class="stat"><div class="stat-num">'+tags.length+'</div><div class="stat-label">Categories</div></div>'
-        +'<div class="stat"><div class="stat-num">5</div><div class="stat-label">User Roles</div></div>'
+        +'<div class="stat"><div class="stat-num">6</div><div class="stat-label">User Roles</div></div>'
         +'<div class="stat"><div class="stat-num">3</div><div class="stat-label">Languages</div></div>';
       let html='';
       for(const tag of tags){

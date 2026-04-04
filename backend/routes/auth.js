@@ -1,9 +1,9 @@
 // ============ AUTH API ============
 // POST /api/auth/login — Login with username/password, returns JWT
-// POST /api/auth/register — Create new account (operator only, or first user)
+// POST /api/auth/register — Create new account (admin only, or first user)
 // GET  /api/auth/me — Get current user profile
 // PATCH /api/auth/password — Change password
-// GET  /api/auth/users — List all users (operator only)
+// GET  /api/auth/users — List all users (admin only)
 
 const express = require('express');
 const router = express.Router();
@@ -53,12 +53,12 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // POST /api/auth/register — Operator creates new users
-  router.post('/register', authenticate, requireRole('operator'), validate({
+  // POST /api/auth/register — Admin creates new users
+  router.post('/register', authenticate, requireRole('admin'), validate({
     username: { required: true, type: 'string', maxLen: 50, minLen: 3 },
     password: { required: true, type: 'string', maxLen: 128, minLen: 6 },
     name: { required: true, type: 'string', maxLen: 100 },
-    role: { type: 'string', allowed: ['operator', 'tenant', 'landlord', 'vendor', 'agent'] },
+    role: { type: 'string', allowed: ['admin', 'operator', 'tenant', 'landlord', 'vendor', 'agent'] },
     email: { type: 'string', maxLen: 200 },
     phone: { type: 'string', maxLen: 20 }
   }), async (req, res) => {
@@ -121,16 +121,16 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // GET /api/auth/users — List all users (operator only)
-  router.get('/users', authenticate, requireRole('operator'), async (req, res) => {
+  // GET /api/auth/users — List all users (admin only)
+  router.get('/users', authenticate, requireRole('admin'), async (req, res) => {
     try {
       const users = await db.getAllUsers();
       res.json(users);
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // DELETE /api/auth/users/:id — Delete user (operator only)
-  router.delete('/users/:id', authenticate, requireRole('operator'), async (req, res) => {
+  // DELETE /api/auth/users/:id — Delete user (admin only)
+  router.delete('/users/:id', authenticate, requireRole('admin'), async (req, res) => {
     try {
       if (parseInt(req.params.id) === req.user.id) {
         return res.status(400).json({ error: 'Cannot delete your own account' });

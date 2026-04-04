@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://js.stripe.com; img-src 'self' data: blob:; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com">
 <title>WeStay Coliving — Management Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -24,11 +24,11 @@
       <div id="loginError" style="display:none;color:#E17055;background:#fff5f5;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;border:1px solid #fecdd2"><i class="fas fa-exclamation-circle"></i> <span></span></div>
       <div class="field">
         <label>Username</label>
-        <input type="text" id="loginUsername" placeholder="e.g. operator, sarah, landlord" value="operator" autocomplete="username">
+        <input type="text" id="loginUsername" placeholder="e.g. admin, operator, sarah" value="admin" autocomplete="username">
       </div>
       <div class="field">
         <label>Password</label>
-        <input type="password" id="loginPass" placeholder="Enter your password" value="op123456" autocomplete="current-password">
+        <input type="password" id="loginPass" placeholder="Enter your password" value="admin123456" autocomplete="current-password">
       </div>
       <div class="login-opts">
         <label><input type="checkbox" id="rememberMe" checked> Remember me</label>
@@ -37,9 +37,10 @@
       <button class="btn-login" id="loginBtn"><i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In</button>
       <div class="login-footer" style="margin-top:16px;font-size:12px;color:#999;line-height:1.6">
         <strong>Demo Accounts:</strong><br>
-        <code>operator</code> / <code>op123456</code> &nbsp;|&nbsp;
-        <code>sarah</code> / <code>tenant123</code><br>
-        <code>landlord</code> / <code>landlord123</code> &nbsp;|&nbsp;
+        <code>admin</code> / <code>admin123456</code> &nbsp;|&nbsp;
+        <code>operator</code> / <code>op123456</code><br>
+        <code>sarah</code> / <code>tenant123</code> &nbsp;|&nbsp;
+        <code>landlord</code> / <code>landlord123</code><br>
         <code>vendor</code> / <code>vendor123</code> &nbsp;|&nbsp;
         <code>agent</code> / <code>agent123</code>
       </div>

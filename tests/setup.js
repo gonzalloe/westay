@@ -80,6 +80,7 @@ function generateTestToken(user) {
  */
 function getTestUsers() {
   return {
+    admin: { id: 'u-0', username: 'admin', role: 'admin' },
     operator: { id: 'u-1', username: 'operator', role: 'operator' },
     tenant: { id: 'u-2', username: 'sarah', role: 'tenant', linkedEntity: 'Sarah Lim' },
     landlord: { id: 'u-3', username: 'landlord', role: 'landlord', linkedEntity: 'Dato Lee Wei' },

@@ -181,6 +181,13 @@ describe('API Route Logic', () => {
   describe('JWT Auth', () => {
     const jwt = require('jsonwebtoken');
 
+    test('generates valid token for admin', () => {
+      const token = generateTestToken(users.admin);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      expect(decoded.username).toBe('admin');
+      expect(decoded.role).toBe('admin');
+    });
+
     test('generates valid token for operator', () => {
       const token = generateTestToken(users.operator);
       const decoded = jwt.verify(token, process.env.JWT_SECRET);

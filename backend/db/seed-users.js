@@ -8,14 +8,24 @@ module.exports = async function seedUsers(db) {
   const hash = (pw) => bcrypt.hashSync(pw, 10);
 
   const users = [
-    // Operator — full system access
+    // Admin — full system access (user management, data reset, audit, etc.)
+    {
+      username: 'admin',
+      password: hash('admin123456'),
+      role: 'admin',
+      name: 'System Admin',
+      email: 'admin@westay.my',
+      phone: '+60 12-000 0000',
+      linked_entity: null
+    },
+    // Operator — routine operational work (properties, tenants, billing, maintenance, IoT)
     {
       username: 'operator',
       password: hash('op123456'),
       role: 'operator',
-      name: 'Admin Operator',
+      name: 'Site Operator',
       email: 'operator@westay.my',
-      phone: '+60 12-000 0000',
+      phone: '+60 12-000 0001',
       linked_entity: null
     },
     // Tenant — linked to Sarah Lim

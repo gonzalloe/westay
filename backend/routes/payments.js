@@ -15,7 +15,8 @@ module.exports = function(db) {
       configured: payment.isConfigured(),
       provider: 'stripe',
       methods: ['fpx', 'card', 'grabpay'],
-      currency: 'myr'
+      currency: 'myr',
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
     });
   });
 
