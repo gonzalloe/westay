@@ -807,44 +807,159 @@ function tenantPayAllBills() {
 }
 
 function processBulkPayment() {
-  var btn = document.getElementById('pgBulkPayBtn');
+  var method = (document.getElementById('pgBulkMethod') || {}).value || 'fpx';
+  var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
+  var unpaidRent = BILLS.filter(function(b) { return b.t === tenant && b.s !== 'Paid'; });
+  var unpaidUtil = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant && b.status !== 'Paid'; }) : [];
+  var totalAmt = 0;
+  unpaidRent.forEach(function(b) { totalAmt += parseInt(b.a.replace(/[^\d]/g, '')) || 0; });
+  unpaidUtil.forEach(function(b) { totalAmt += b.total; });
+  var count = unpaidRent.length + unpaidUtil.length;
+
+  // Show simulated payment page for selected method
+  _showBulkSimPaymentPage(method, totalAmt, count);
+}
+
+function _showBulkSimPaymentPage(method, amount, billCount) {
+  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
+  var html = '<div style="max-width:420px;margin:0 auto">';
+
+  // Header
+  html += '<div style="text-align:center;margin-bottom:16px;padding:14px;background:var(--bg3);border-radius:12px">' +
+    '<div style="font-size:10px;color:var(--t3);margin-bottom:2px">Bulk Payment — ' + billCount + ' bill(s)</div>' +
+    '<div style="font-size:28px;font-weight:800;color:var(--p)">RM ' + amount.toFixed(2) + '</div></div>';
+
+  if (method === 'fpx') {
+    var banks = ['Maybank','CIMB Clicks','Public Bank','RHB Now','Hong Leong Connect','AmOnline','Bank Islam','Bank Rakyat'];
+    var bankIcons = ['\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6','\uD83C\uDFE6'];
+    var bankColors = ['#FBC02D','#ED1C24','#fff','#0057A8','#005BAA','#000','#14823C','#FF6B00'];
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-university" style="color:#003D6B;margin-right:6px"></i>Select Your Bank</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+    banks.forEach(function(b, i) {
+      html += '<div class="fpx-bank" onclick="_selectSimBank(this,' + i + ')" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .15s">' +
+        '<div style="width:28px;height:28px;border-radius:6px;background:' + bankColors[i] + ';display:flex;align-items:center;justify-content:center;font-size:14px">' + bankIcons[i] + '</div>' +
+        '<span style="font-size:11px;font-weight:500">' + b + '</span></div>';
+    });
+    html += '</div>';
+  } else if (method === 'card') {
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-credit-card" style="color:#6C5CE7;margin-right:6px"></i>Card Details</div>';
+    html += '<div style="background:var(--bg3);border-radius:12px;padding:14px;margin-bottom:14px">';
+    html += '<div class="form-group" style="margin-bottom:10px"><label style="font-size:10px">Card Number</label><input id="simCardNum" type="text" maxlength="19" placeholder="4242 4242 4242 4242" style="font-size:14px;letter-spacing:1px" oninput="this.value=this.value.replace(/[^\\d]/g,\'\').replace(/(\\d{4})(?=\\d)/g,\'$1 \')"></div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="form-group"><label style="font-size:10px">Expiry</label><input id="simCardExp" type="text" maxlength="5" placeholder="MM/YY" oninput="this.value=this.value.replace(/[^\\d]/g,\'\').replace(/(\\d{2})(?=\\d)/,\'$1/\')"></div>' +
+      '<div class="form-group"><label style="font-size:10px">CVC</label><input id="simCardCvc" type="text" maxlength="4" placeholder="123"></div></div>';
+    html += '<div class="form-group" style="margin-bottom:0"><label style="font-size:10px">Cardholder Name</label><input id="simCardName" type="text" placeholder="Name on card"></div>';
+    html += '</div>';
+  } else {
+    html += '<div style="text-align:center;padding:24px;background:var(--bg3);border-radius:14px;margin-bottom:14px">' +
+      '<div style="font-size:48px;margin-bottom:8px">\uD83D\uDCF1</div>' +
+      '<div style="font-size:14px;font-weight:600;color:#00B14F;margin-bottom:4px">GrabPay</div>' +
+      '<div style="font-size:11px;color:var(--t3)">You will be redirected to authorize payment of <b>RM ' + amount.toFixed(2) + '</b> for ' + billCount + ' bill(s)</div></div>';
+  }
+
+  html += '<div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg3);border-radius:10px">' +
+    '<i class="fas fa-shield-alt" style="color:var(--ok);font-size:14px"></i>' +
+    '<div style="font-size:10px;color:var(--t3)">Secured by WeStay Payment Gateway &bull; PCI DSS Compliant</div></div>';
+  html += '</div>';
+
+  _simSelectedBank = -1;
+
+  var title = method === 'fpx' ? '<i class="fas fa-university" style="color:#003D6B"></i> FPX Online Banking' :
+    method === 'card' ? '<i class="fas fa-credit-card" style="color:#6C5CE7"></i> Card Payment' :
+    '<i class="fas fa-mobile-alt" style="color:#00B14F"></i> GrabPay';
+
+  var confirmLabel = method === 'fpx' ? '<i class="fas fa-sign-in-alt"></i> Login to Bank & Pay' :
+    method === 'card' ? '<i class="fas fa-lock"></i> Pay RM ' + amount.toFixed(2) :
+    '<i class="fas fa-check-circle"></i> Authorize Payment';
+
+  openModal(title, html,
+    '<button class="btn btn-ghost" onclick="closeModal();toast(\'Payment cancelled\',\'info\')">Cancel</button>' +
+    '<button class="btn btn-p" id="simPayConfirmBtn" onclick="_confirmBulkSimPayment(\'' + method + '\')" style="min-width:180px">' + confirmLabel + '</button>', 'sm');
+}
+
+async function _confirmBulkSimPayment(method) {
+  // Validate inputs
+  if (method === 'fpx' && _simSelectedBank < 0) { toast('Please select a bank', 'error'); return; }
+  if (method === 'card') {
+    var num = (document.getElementById('simCardNum') || {}).value || '';
+    var exp = (document.getElementById('simCardExp') || {}).value || '';
+    var cvc = (document.getElementById('simCardCvc') || {}).value || '';
+    if (num.replace(/\s/g, '').length < 13) { toast('Enter a valid card number', 'error'); return; }
+    if (exp.length < 4) { toast('Enter card expiry', 'error'); return; }
+    if (cvc.length < 3) { toast('Enter CVC code', 'error'); return; }
+  }
+
+  // Show processing
+  var btn = document.getElementById('simPayConfirmBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; btn.style.opacity = '0.7'; }
 
+  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
   var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
 
-  setTimeout(async function() {
-    var count = 0;
-    var unpaidRent = BILLS.filter(function(b) { return b.t === tenant && b.s !== 'Paid'; });
-    var unpaidUtil = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant && b.status !== 'Paid'; }) : [];
+  // Simulate bank/provider processing delay
+  await new Promise(function(r) { setTimeout(r, 2000); });
 
-    if (_useAPI) {
-      // Pay each bill via proper API endpoints
-      for (var i = 0; i < unpaidRent.length; i++) {
-        try {
-          await apiFetch('/bills/' + unpaidRent[i].id + '/pay', { method: 'PATCH' });
-          unpaidRent[i].s = 'Paid';
-          count++;
-        } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidRent[i].id, e); }
-      }
-      for (var j = 0; j < unpaidUtil.length; j++) {
-        try {
-          await apiFetch('/utility-bills/' + unpaidUtil[j].id + '/pay', { method: 'PATCH' });
-          unpaidUtil[j].status = 'Paid';
-          count++;
-        } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidUtil[j].id, e); }
-      }
-    } else {
-      // Offline fallback
-      unpaidRent.forEach(function(b) { b.s = 'Paid'; count++; });
-      unpaidUtil.forEach(function(b) { b.status = 'Paid'; count++; });
-      saveData();
+  var count = 0;
+  var unpaidRent = BILLS.filter(function(b) { return b.t === tenant && b.s !== 'Paid'; });
+  var unpaidUtil = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant && b.status !== 'Paid'; }) : [];
+
+  if (_useAPI) {
+    for (var i = 0; i < unpaidRent.length; i++) {
+      try {
+        var result = await apiFetch('/bills/' + unpaidRent[i].id + '/pay', { method: 'PATCH' });
+        unpaidRent[i].s = 'Paid';
+        if (result && result.reconnected) {
+          var meter = ELECTRIC_METERS.find(function(m) { return m.meterId === result.reconnected.meterId; });
+          if (meter) meter.status = 'Connected';
+        }
+        if (result && result.lockReEnabled) {
+          var lock = SMART_LOCK_REGISTRY.find(function(l) { return l.tenant === result.lockReEnabled.tenant; });
+          if (lock) { lock.status = 'Active'; lock.fingerprints = 2; }
+        }
+        count++;
+      } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidRent[i].id, e); }
     }
+    for (var j = 0; j < unpaidUtil.length; j++) {
+      try {
+        await apiFetch('/utility-bills/' + unpaidUtil[j].id + '/pay', { method: 'PATCH' });
+        unpaidUtil[j].status = 'Paid';
+        count++;
+      } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidUtil[j].id, e); }
+    }
+  } else {
+    unpaidRent.forEach(function(b) { b.s = 'Paid'; count++; });
+    unpaidUtil.forEach(function(b) { b.status = 'Paid'; count++; });
+    saveData();
+  }
 
-    closeModal();
-    toast(count + ' bill(s) paid successfully!', 'success');
-    pushNotif('fa-credit-card', '#00B894', 'Bulk Payment', count + ' bills paid');
-    navigateTo(currentPage);
-  }, 1500);
+  closeModal();
+
+  // Show bulk receipt
+  var totalAmt = 0;
+  BILLS.filter(function(b) { return b.t === tenant && b.s === 'Paid'; }).forEach(function(b) { totalAmt += parseInt(b.a.replace(/[^\d]/g, '')) || 0; });
+
+  var receiptHtml = '<div style="text-align:center;padding:20px">' +
+    '<div style="width:64px;height:64px;border-radius:50%;background:#00B89422;color:#00B894;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px"><i class="fas fa-check"></i></div>' +
+    '<h3 style="color:#00B894;margin-bottom:4px">Bulk Payment Successful!</h3>' +
+    '<div style="font-size:11px;color:var(--t3);margin-bottom:18px">' + count + ' bill(s) paid via ' + (methodNames[method] || 'Online') + '</div>' +
+    '<div class="dep-card">' +
+    depRow('Bills Paid', count + ' bill(s)') +
+    depRow('Method', methodNames[method] || 'Online') +
+    depRow('Date', new Date().toLocaleDateString('en-MY')) +
+    depRow('Time', new Date().toLocaleTimeString('en-MY')) +
+    depRowHtml('Status', '<span class="bs b-ok">Paid</span>') +
+    depRow('Ref No.', 'WS-BULK-' + Date.now().toString(36).toUpperCase()) +
+    '</div></div>';
+
+  setTimeout(function() {
+    openModal('<i class="fas fa-receipt" style="color:#00B894"></i> Payment Receipt', receiptHtml,
+      '<button class="btn btn-ghost" onclick="closeModal();navigateTo(currentPage)">Done</button>' +
+      '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print Receipt</button>', 'sm');
+  }, 200);
+
+  toast(count + ' bill(s) paid successfully!', 'success');
+  pushNotif('fa-credit-card', '#00B894', 'Bulk Payment', count + ' bills paid via ' + (methodNames[method] || 'Online'));
+  _simSelectedBank = -1;
 }
 
 // Preview My Bills Report
