@@ -1,6 +1,9 @@
 // ============ CHECK-IN/OUT, NOTIFICATIONS, AUTOMATIONS, CONFIG APIs ============
 const express = require('express');
 const router = express.Router();
+const { requireRole } = require('../middleware/auth');
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -10,7 +13,7 @@ module.exports = function(db) {
       const records = req.query.tenant
         ? await db.query('checkinout_records', { tenant: req.query.tenant })
         : await db.getAll('checkinout_records');
-      res.json(records);
+      res.json(paginate(records, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -22,10 +25,15 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/checkinout', async (req, res) => {
+  router.post('/checkinout', validate({
+    tenant: { required: true, type: 'string', maxLen: 100 },
+    unit: { type: 'string', maxLen: 100 },
+    type: { type: 'string', allowed: ['check-in', 'check-out'] },
+    inspector: { type: 'string', maxLen: 100 },
+    notes: { type: 'string', maxLen: 2000 }
+  }), async (req, res) => {
     try {
       const { tenant, unit, type, inspector, notes, photos } = req.body;
-      if (!tenant) return res.status(400).json({ error: 'Tenant required' });
       const all = await db.getAll('checkinout_records');
       const record = {
         id: 'CIO-' + String(all.length + 1).padStart(3, '0'),
@@ -39,7 +47,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/checkinout/:id', async (req, res) => {
+  router.put('/checkinout/:id', stripFields('id'), async (req, res) => {
     try {
       const updated = await db.update('checkinout_records', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Record not found' });
@@ -58,11 +66,16 @@ module.exports = function(db) {
 
   // ========== NOTIFICATIONS ==========
   router.get('/notifs', async (req, res) => {
-    try { res.json(await db.getAll('notifs')); }
+    try { res.json(paginate(await db.getAll('notifs'), req)); }
     catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/notifs', async (req, res) => {
+  router.post('/notifs', validate({
+    title: { type: 'string', maxLen: 200 },
+    desc: { type: 'string', maxLen: 500 },
+    icon: { type: 'string', maxLen: 50 },
+    c: { type: 'string', maxLen: 20 }
+  }), async (req, res) => {
     try {
       const { icon, c, title, desc } = req.body;
       const notif = { id: Date.now(), icon: icon || 'fa-bell', c: c || '#6C5CE7', title: title || '', desc: desc || '', time: 'Just now', read: false };
@@ -147,8 +160,8 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // ========== DATA RESET ==========
-  router.post('/reset', async (req, res) => {
+  // ========== DATA RESET (OPERATOR ONLY — destructive) ==========
+  router.post('/reset', requireRole('operator'), async (req, res) => {
     try {
       const seed = require('../db/seed');
       const seedUsers = require('../db/seed-users');
@@ -192,8 +205,8 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // ========== BULK SAVE (for frontend saveData() compat) ==========
-  router.post('/save-data', async (req, res) => {
+  // ========== BULK SAVE (OPERATOR ONLY — destructive) ==========
+  router.post('/save-data', requireRole('operator'), async (req, res) => {
     try {
       const d = req.body;
       const mapping = {

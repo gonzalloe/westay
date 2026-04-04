@@ -1,15 +1,23 @@
 // ============ CONTRACTS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
   router.get('/', async (req, res) => {
     try {
-      const contracts = Object.keys(req.query).length
-        ? await db.query('contracts', req.query)
-        : await db.getAll('contracts');
-      res.json(contracts);
+      let contracts;
+      if (req.query.s || req.query.tenant) {
+        const filter = {};
+        if (req.query.s) filter.s = req.query.s;
+        if (req.query.tenant) filter.tenant = req.query.tenant;
+        contracts = await db.query('contracts', filter);
+      } else {
+        contracts = await db.getAll('contracts');
+      }
+      res.json(paginate(contracts, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -21,10 +29,16 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    tenant: { required: true, type: 'string', maxLen: 100 },
+    prop: { required: true, type: 'string', maxLen: 200 },
+    start: { type: 'string', maxLen: 20 },
+    end: { type: 'string', maxLen: 20 },
+    rent: { maxLen: 20 },
+    dep: { type: 'string', maxLen: 20 }
+  }), async (req, res) => {
     try {
       const { tenant, prop, start, end, rent, dep } = req.body;
-      if (!tenant || !prop) return res.status(400).json({ error: 'Tenant and property required' });
       const all = await db.getAll('contracts');
       const r = parseInt(String(rent).replace(/[^\d]/g, '')) || 0;
       const contract = {
@@ -38,7 +52,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', stripFields('id'), async (req, res) => {
     try {
       const updated = await db.update('contracts', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Contract not found' });

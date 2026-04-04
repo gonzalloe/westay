@@ -9,21 +9,22 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { authenticate, requireRole, signToken } = require('../middleware/auth');
+const { validate, stripFields } = require('../middleware/validate');
 
 module.exports = function(db) {
 
   // POST /api/auth/login
-  router.post('/login', async (req, res) => {
+  router.post('/login', validate({
+    username: { required: true, type: 'string', maxLen: 50 },
+    password: { required: true, type: 'string', maxLen: 128 }
+  }), async (req, res) => {
     try {
       const { username, password } = req.body;
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
-      }
 
       const user = await db.getUserByUsername(username.toLowerCase().trim());
       if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-      const valid = bcrypt.compareSync(password, user.password);
+      const valid = await bcrypt.compare(password, user.password);
       if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
       // Update last login
@@ -53,24 +54,25 @@ module.exports = function(db) {
   });
 
   // POST /api/auth/register — Operator creates new users
-  router.post('/register', authenticate, requireRole('operator'), async (req, res) => {
+  router.post('/register', authenticate, requireRole('operator'), validate({
+    username: { required: true, type: 'string', maxLen: 50, minLen: 3 },
+    password: { required: true, type: 'string', maxLen: 128, minLen: 6 },
+    name: { required: true, type: 'string', maxLen: 100 },
+    role: { type: 'string', allowed: ['operator', 'tenant', 'landlord', 'vendor', 'agent'] },
+    email: { type: 'string', maxLen: 200 },
+    phone: { type: 'string', maxLen: 20 }
+  }), async (req, res) => {
     try {
       const { username, password, role, name, email, phone, linked_entity } = req.body;
-      if (!username || !password || !name) {
-        return res.status(400).json({ error: 'username, password, and name required' });
-      }
-      const validRoles = ['operator', 'tenant', 'landlord', 'vendor', 'agent'];
-      if (role && !validRoles.includes(role)) {
-        return res.status(400).json({ error: 'Invalid role. Must be: ' + validRoles.join(', ') });
-      }
 
       // Check duplicate
       const existing = await db.getUserByUsername(username.toLowerCase().trim());
       if (existing) return res.status(409).json({ error: 'Username already exists' });
 
+      const hashedPassword = await bcrypt.hash(password, 10);
       const user = await db.createUser({
         username: username.toLowerCase().trim(),
-        password: bcrypt.hashSync(password, 10),
+        password: hashedPassword,
         role: role || 'tenant',
         name,
         email: email || null,
@@ -100,22 +102,21 @@ module.exports = function(db) {
   });
 
   // PATCH /api/auth/password — Change own password
-  router.patch('/password', authenticate, async (req, res) => {
+  router.patch('/password', authenticate, validate({
+    current_password: { required: true, type: 'string', maxLen: 128 },
+    new_password: { required: true, type: 'string', maxLen: 128, minLen: 6 }
+  }), async (req, res) => {
     try {
       const { current_password, new_password } = req.body;
-      if (!current_password || !new_password) {
-        return res.status(400).json({ error: 'current_password and new_password required' });
-      }
-      if (new_password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
-      }
 
       const user = await db.getUserById(req.user.id);
-      if (!bcrypt.compareSync(current_password, user.password)) {
+      const valid = await bcrypt.compare(current_password, user.password);
+      if (!valid) {
         return res.status(401).json({ error: 'Current password incorrect' });
       }
 
-      await db.updateUser(req.user.id, { password: bcrypt.hashSync(new_password, 10) });
+      const hashedPassword = await bcrypt.hash(new_password, 10);
+      await db.updateUser(req.user.id, { password: hashedPassword });
       res.json({ success: true, message: 'Password changed' });
     } catch(e) { res.status(500).json({ error: e.message }); }
   });

@@ -1,16 +1,24 @@
 // ============ UTILITY BILLS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
   // GET /api/utility-bills — All (optional ?tenant=Sarah+Lim&status=Pending)
   router.get('/', async (req, res) => {
     try {
-      const bills = Object.keys(req.query).length
-        ? await db.query('utility_bills', req.query)
-        : await db.getAll('utility_bills');
-      res.json(bills);
+      let bills;
+      if (req.query.tenant || req.query.status) {
+        const filter = {};
+        if (req.query.tenant) filter.tenant = req.query.tenant;
+        if (req.query.status) filter.status = req.query.status;
+        bills = await db.query('utility_bills', filter);
+      } else {
+        bills = await db.getAll('utility_bills');
+      }
+      res.json(paginate(bills, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -89,7 +97,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', stripFields('id'), async (req, res) => {
     try {
       const updated = await db.update('utility_bills', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Utility bill not found' });

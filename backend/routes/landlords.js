@@ -1,11 +1,13 @@
 // ============ LANDLORDS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
   router.get('/', async (req, res) => {
-    try { res.json(await db.getAll('landlords')); }
+    try { res.json(paginate(await db.getAll('landlords'), req)); }
     catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -62,17 +64,20 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    n: { required: true, type: 'string', maxLen: 100 },
+    props: { isArray: true },
+    units: { type: 'number' }
+  }), async (req, res) => {
     try {
       const { n, props, units } = req.body;
-      if (!n) return res.status(400).json({ error: 'Name is required' });
       const ll = { n, props: props || [], units: units || 0, occ: 0, rev: 'RM 0', payout: 'RM 0' };
       await db.create('landlords', ll);
       res.status(201).json(ll);
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:name', async (req, res) => {
+  router.put('/:name', stripFields('n'), async (req, res) => {
     try {
       const updated = await db.update('landlords', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Landlord not found' });

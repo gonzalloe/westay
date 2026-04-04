@@ -2,18 +2,64 @@
 // Full-stack: SQLite DB + JWT Auth + Role-based Access + REST API
 // Repository pattern: swap sqlite-adapter for mysql/mongo in db/index.js
 
+// Load environment variables FIRST
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { getDB } = require('./backend/db');
 const { authenticate, requireRole, optionalAuth } = require('./backend/middleware/auth');
+const { sanitizeRequest } = require('./backend/middleware/validate');
+const errorHandler = require('./backend/middleware/error-handler');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
 
-// ---- Middleware ----
-app.use(cors());
+// ---- Security Middleware ----
+
+// Helmet: HTTP security headers (CSP, HSTS, X-Frame, etc.)
+app.use(helmet({
+  contentSecurityPolicy: false, // disabled — SPA loads inline scripts / CDN assets
+  crossOriginEmbedderPolicy: false
+}));
+
+// CORS: restrict origins in production
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+app.use(cors({
+  origin: corsOrigin === '*' ? true : corsOrigin.split(',').map(s => s.trim()),
+  credentials: true
+}));
+
+// Body parser with size limit
 app.use(express.json({ limit: '5mb' }));
+
+// Sanitize all incoming request bodies / query / params
+app.use(sanitizeRequest);
+
+// ---- Rate Limiting ----
+
+// Global API rate limit
+const globalLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 min
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 300, // 300 req per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api', globalLimiter);
+
+// Aggressive login rate limit (brute-force protection)
+const loginLimiter = rateLimit({
+  windowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 min
+  max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX) || 5, // 5 login attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again in 15 minutes' }
+});
+app.use('/api/auth/login', loginLimiter);
 
 // ---- DB initialization guard ----
 let dbReady = false;
@@ -115,6 +161,9 @@ app.use('/api', async (req, res, next) => {
     res.sendFile(path.join(__dirname, 'index.html'));
   });
 
+  // ---- Centralized Error Handler (MUST be last middleware) ----
+  app.use(errorHandler);
+
   // ---- Start Server ----
   app.listen(PORT, () => {
     console.log('');
@@ -125,6 +174,7 @@ app.use('/api', async (req, res, next) => {
     console.log('  API Base : http://localhost:' + PORT + '/api');
     console.log('  Database : SQLite (backend/data/westay.db)');
     console.log('  Auth     : JWT + bcrypt');
+    console.log('  Security : helmet + rate-limit + CORS + input sanitization');
     console.log('  ===================================');
     console.log('');
     console.log('  Default Accounts:');

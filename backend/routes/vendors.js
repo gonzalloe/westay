@@ -1,6 +1,8 @@
 // ============ VENDORS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -9,7 +11,7 @@ module.exports = function(db) {
       const vendors = req.query.type
         ? await db.query('vendors', { type: req.query.type })
         : await db.getAll('vendors');
-      res.json(vendors);
+      res.json(paginate(vendors, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -21,10 +23,13 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    n: { required: true, type: 'string', maxLen: 200 },
+    type: { type: 'string', maxLen: 50 },
+    phone: { type: 'string', maxLen: 20 }
+  }), async (req, res) => {
     try {
       const { n, type, phone } = req.body;
-      if (!n) return res.status(400).json({ error: 'Name is required' });
       const colors = await db.getStore('config', 'colors');
       const all = await db.getAll('vendors');
       const vendor = { n, type: type || 'General', jobs: 0, rating: 0, s: 'active', c: colors[all.length % 8], phone: phone || '' };
@@ -33,7 +38,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:name', async (req, res) => {
+  router.put('/:name', stripFields('n'), async (req, res) => {
     try {
       const updated = await db.update('vendors', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Vendor not found' });

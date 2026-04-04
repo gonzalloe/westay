@@ -1,6 +1,8 @@
 // ============ BILLS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -8,12 +10,15 @@ module.exports = function(db) {
   router.get('/', async (req, res) => {
     try {
       let bills;
-      if (Object.keys(req.query).length) {
-        bills = await db.query('bills', req.query);
+      if (req.query.s || req.query.t) {
+        const filter = {};
+        if (req.query.s) filter.s = req.query.s;
+        if (req.query.t) filter.t = req.query.t;
+        bills = await db.query('bills', filter);
       } else {
         bills = await db.getAll('bills');
       }
-      res.json(bills);
+      res.json(paginate(bills, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -27,10 +32,14 @@ module.exports = function(db) {
   });
 
   // POST /api/bills — Create bill
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    t: { required: true, type: 'string', maxLen: 100 },
+    a: { type: 'string', maxLen: 30 },
+    d: { type: 'string', maxLen: 30 },
+    prop: { type: 'string', maxLen: 200 }
+  }), async (req, res) => {
     try {
       const { t, a, d, prop } = req.body;
-      if (!t) return res.status(400).json({ error: 'Tenant name (t) is required' });
       const all = await db.getAll('bills');
       const bill = {
         id: 'INV-' + (2604 + all.length),
@@ -44,7 +53,7 @@ module.exports = function(db) {
   });
 
   // PUT /api/bills/:id
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', stripFields('id'), async (req, res) => {
     try {
       const updated = await db.update('bills', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Bill not found' });

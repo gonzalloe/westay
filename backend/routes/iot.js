@@ -1,6 +1,8 @@
 // ============ IoT API (Electric Meters, Water Meters, Smart Locks, IoT Locks) ============
 const express = require('express');
 const router = express.Router();
+const { validate } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -12,7 +14,7 @@ module.exports = function(db) {
         ? await db.query('electric_meters', { unit: req.query.unit })
         : await db.getAll('electric_meters');
       if (req.query.status) meters = meters.filter(m => m.status === req.query.status);
-      res.json(meters);
+      res.json(paginate(meters, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -26,7 +28,9 @@ module.exports = function(db) {
   });
 
   // PATCH /api/iot/electric-meters/:meterId/cut — Manual cut
-  router.patch('/electric-meters/:meterId/cut', async (req, res) => {
+  router.patch('/electric-meters/:meterId/cut', validate({
+    reason: { type: 'string', maxLen: 200 }
+  }), async (req, res) => {
     try {
       const meter = await db.getById('electric_meters', req.params.meterId);
       if (!meter) return res.status(404).json({ error: 'Meter not found' });
@@ -88,7 +92,9 @@ module.exports = function(db) {
   });
 
   // PATCH /api/iot/electric-meters/cut-unit/:unitName — Cut all rooms in a unit
-  router.patch('/electric-meters/cut-unit/:unitName', async (req, res) => {
+  router.patch('/electric-meters/cut-unit/:unitName', validate({
+    reason: { type: 'string', maxLen: 200 }
+  }), async (req, res) => {
     try {
       const unitName = decodeURIComponent(req.params.unitName);
       const meters = await db.query('electric_meters', { unit: unitName });
@@ -108,7 +114,7 @@ module.exports = function(db) {
       const meters = req.query.unit
         ? await db.query('water_meters', { unit: req.query.unit })
         : await db.getAll('water_meters');
-      res.json(meters);
+      res.json(paginate(meters, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -122,12 +128,14 @@ module.exports = function(db) {
 
   // ---- SMART LOCK REGISTRY (Fingerprints) ----
   router.get('/smart-locks', async (req, res) => {
-    try { res.json(await db.getAll('smart_lock_registry')); }
+    try { res.json(paginate(await db.getAll('smart_lock_registry'), req)); }
     catch(e) { res.status(500).json({ error: e.message }); }
   });
 
   // PATCH /api/iot/smart-locks/:tenant/disable
-  router.patch('/smart-locks/:tenant/disable', async (req, res) => {
+  router.patch('/smart-locks/:tenant/disable', validate({
+    reason: { type: 'string', maxLen: 200 }
+  }), async (req, res) => {
     try {
       const tenant = decodeURIComponent(req.params.tenant);
       const lock = await db.getById('smart_lock_registry', tenant);
@@ -198,7 +206,7 @@ module.exports = function(db) {
           case 'unlocked': locks = locks.filter(l => l.status === 'Unlocked'); break;
         }
       }
-      res.json(locks);
+      res.json(paginate(locks, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 

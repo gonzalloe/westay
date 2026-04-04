@@ -1,15 +1,23 @@
 // ============ LEADS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
   router.get('/', async (req, res) => {
     try {
-      const leads = Object.keys(req.query).length
-        ? await db.query('leads', req.query)
-        : await db.getAll('leads');
-      res.json(leads);
+      let leads;
+      if (req.query.s || req.query.src) {
+        const filter = {};
+        if (req.query.s) filter.s = req.query.s;
+        if (req.query.src) filter.src = req.query.src;
+        leads = await db.query('leads', filter);
+      } else {
+        leads = await db.getAll('leads');
+      }
+      res.json(paginate(leads, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -21,10 +29,15 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    n: { required: true, type: 'string', maxLen: 100 },
+    phone: { type: 'string', maxLen: 20 },
+    src: { type: 'string', maxLen: 50 },
+    prop: { type: 'string', maxLen: 200 },
+    budget: { type: 'string', maxLen: 30 }
+  }), async (req, res) => {
     try {
       const { n, phone, src, prop, budget } = req.body;
-      if (!n) return res.status(400).json({ error: 'Name is required' });
       const lead = {
         n, phone: phone || '', src: src || 'Website', prop: prop || '',
         s: 'New', date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -35,7 +48,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:name', async (req, res) => {
+  router.put('/:name', stripFields('n'), async (req, res) => {
     try {
       const updated = await db.update('leads', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Lead not found' });
@@ -44,10 +57,11 @@ module.exports = function(db) {
   });
 
   // PATCH /api/leads/:name/status
-  router.patch('/:name/status', async (req, res) => {
+  router.patch('/:name/status', validate({
+    status: { required: true, type: 'string', allowed: ['New', 'Contacted', 'Viewing Scheduled', 'Negotiating', 'Converted', 'Lost'] }
+  }), async (req, res) => {
     try {
       const { status } = req.body;
-      if (!status) return res.status(400).json({ error: 'Status required' });
       const updated = await db.update('leads', decodeURIComponent(req.params.name), { s: status });
       if (!updated) return res.status(404).json({ error: 'Lead not found' });
       res.json(updated);

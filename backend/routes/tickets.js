@@ -1,6 +1,8 @@
 // ============ TICKETS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -8,12 +10,15 @@ module.exports = function(db) {
   router.get('/', async (req, res) => {
     try {
       let tickets;
-      if (Object.keys(req.query).length) {
-        tickets = await db.query('tickets', req.query);
+      if (req.query.pr || req.query.s) {
+        const filter = {};
+        if (req.query.pr) filter.pr = req.query.pr;
+        if (req.query.s) filter.s = req.query.s;
+        tickets = await db.query('tickets', filter);
       } else {
         tickets = await db.getAll('tickets');
       }
-      res.json(tickets);
+      res.json(paginate(tickets, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -27,10 +32,14 @@ module.exports = function(db) {
   });
 
   // POST /api/tickets
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    t: { required: true, type: 'string', maxLen: 300 },
+    loc: { type: 'string', maxLen: 200 },
+    pr: { type: 'string', allowed: ['High', 'Medium', 'Low'] },
+    by: { type: 'string', maxLen: 100 }
+  }), async (req, res) => {
     try {
       const { t, loc, pr, by } = req.body;
-      if (!t) return res.status(400).json({ error: 'Title is required' });
       const all = await db.getAll('tickets');
       const ic = { High: 'fa-fire', Medium: 'fa-exclamation-circle', Low: 'fa-info-circle' };
       const cc = { High: '#E17055', Medium: '#FDCB6E', Low: '#00B894' };
@@ -47,7 +56,7 @@ module.exports = function(db) {
   });
 
   // PUT /api/tickets/:id — Update ticket (including status changes)
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', stripFields('id'), async (req, res) => {
     try {
       if (req.body.s) req.body.time = 'Just now';
       const updated = await db.update('tickets', req.params.id, req.body);
@@ -57,10 +66,11 @@ module.exports = function(db) {
   });
 
   // PATCH /api/tickets/:id/status — Status transition shortcut
-  router.patch('/:id/status', async (req, res) => {
+  router.patch('/:id/status', validate({
+    status: { required: true, type: 'string', allowed: ['Open', 'In Progress', 'Assigned', 'Completed', 'Closed'] }
+  }), async (req, res) => {
     try {
       const { status } = req.body;
-      if (!status) return res.status(400).json({ error: 'Status is required' });
       const updated = await db.update('tickets', req.params.id, { s: status, time: 'Just now' });
       if (!updated) return res.status(404).json({ error: 'Ticket not found' });
       res.json(updated);
@@ -86,10 +96,11 @@ module.exports = function(db) {
   });
 
   // POST /api/tickets/:id/photos — Add photos
-  router.post('/:id/photos', async (req, res) => {
+  router.post('/:id/photos', validate({
+    filenames: { required: true, isArray: true }
+  }), async (req, res) => {
     try {
       const { filenames } = req.body;
-      if (!filenames || !filenames.length) return res.status(400).json({ error: 'filenames required' });
       const existing = (await db.getStore('ticket_photos', req.params.id)) || [];
       const updated = [...existing, ...filenames];
       await db.setStore('ticket_photos', req.params.id, updated);

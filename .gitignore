@@ -1,6 +1,9 @@
 # WorkBuddy local config
 .workbuddy/
 
+# Environment secrets
+.env
+
 # Node
 node_modules/
 

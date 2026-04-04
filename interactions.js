@@ -105,14 +105,32 @@ function clearAuth() {
   sessionStorage.removeItem('westay_user');
 }
 
-// ---- API HELPER (with JWT auth) ----
+// ---- API HELPER (with JWT auth + throttle + timeout + retry) ----
+const _apiFetchQueue = {};
+const API_TIMEOUT_MS = 15000; // 15s timeout
+const API_THROTTLE_MS = 200; // 200ms min between identical calls
+
 async function apiFetch(path, opts) {
+  // Throttle: skip duplicate in-flight requests to same path+method
+  const method = (opts && opts.method) || 'GET';
+  const key = method + ':' + path;
+  const now = Date.now();
+  if (_apiFetchQueue[key] && now - _apiFetchQueue[key] < API_THROTTLE_MS) {
+    return null; // throttled
+  }
+  _apiFetchQueue[key] = now;
+
   try {
     const headers = { 'Content-Type': 'application/json' };
     const token = getAuthToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
 
-    const res = await fetch(API_BASE + path, Object.assign({ headers }, opts));
+    // AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    const res = await fetch(API_BASE + path, Object.assign({ headers, signal: controller.signal }, opts));
+    clearTimeout(timeoutId);
 
     // Handle 401 — token expired or invalid
     if (res.status === 401 && path !== '/auth/login') {
@@ -121,13 +139,25 @@ async function apiFetch(path, opts) {
       return null;
     }
 
+    // Handle 429 — rate limited by server
+    if (res.status === 429) {
+      console.warn('[API] Rate limited on ' + path + ', retrying in 2s...');
+      await new Promise(r => setTimeout(r, 2000));
+      delete _apiFetchQueue[key]; // allow retry
+      return apiFetch(path, opts);
+    }
+
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
       throw new Error(errBody.error || 'HTTP ' + res.status);
     }
     return await res.json();
   } catch(e) {
-    console.warn('[API] ' + path + ' failed:', e.message);
+    if (e.name === 'AbortError') {
+      console.warn('[API] ' + path + ' timed out after ' + (API_TIMEOUT_MS / 1000) + 's');
+    } else {
+      console.warn('[API] ' + path + ' failed:', e.message);
+    }
     return null;
   }
 }

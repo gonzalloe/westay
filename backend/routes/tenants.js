@@ -1,6 +1,8 @@
 // ============ TENANTS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
@@ -8,7 +10,7 @@ module.exports = function(db) {
   router.get('/', async (req, res) => {
     try {
       let tenants;
-      if (Object.keys(req.query).length) {
+      if (req.query.status || req.query.prop) {
         const filter = {};
         if (req.query.status) filter.s = req.query.status;
         if (req.query.prop) filter.p = req.query.prop;
@@ -16,7 +18,7 @@ module.exports = function(db) {
       } else {
         tenants = await db.getAll('tenants');
       }
-      res.json(tenants);
+      res.json(paginate(tenants, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -30,10 +32,15 @@ module.exports = function(db) {
   });
 
   // POST /api/tenants
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    n: { required: true, type: 'string', maxLen: 100 },
+    p: { type: 'string', maxLen: 200 },
+    r: { maxLen: 20 },
+    phone: { type: 'string', maxLen: 20 },
+    e: { type: 'string', maxLen: 20 }
+  }), async (req, res) => {
     try {
       const { n, p, r, phone, e: leaseEnd } = req.body;
-      if (!n) return res.status(400).json({ error: 'Name is required' });
       const rent = parseInt(String(r).replace(/[^\d]/g, '')) || 0;
       const tenant = {
         n, p: p || '', r: 'RM ' + rent, s: 'pending',
@@ -45,7 +52,7 @@ module.exports = function(db) {
   });
 
   // PUT /api/tenants/:name
-  router.put('/:name', async (req, res) => {
+  router.put('/:name', stripFields('n'), async (req, res) => {
     try {
       const updated = await db.update('tenants', decodeURIComponent(req.params.name), req.body);
       if (!updated) return res.status(404).json({ error: 'Tenant not found' });

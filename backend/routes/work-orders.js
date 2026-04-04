@@ -1,15 +1,23 @@
 // ============ WORK ORDERS API ============
 const express = require('express');
 const router = express.Router();
+const { validate, stripFields } = require('../middleware/validate');
+const paginate = require('../middleware/paginate');
 
 module.exports = function(db) {
 
   router.get('/', async (req, res) => {
     try {
-      const orders = Object.keys(req.query).length
-        ? await db.query('work_orders', req.query)
-        : await db.getAll('work_orders');
-      res.json(orders);
+      let orders;
+      if (req.query.s || req.query.vendor) {
+        const filter = {};
+        if (req.query.s) filter.s = req.query.s;
+        if (req.query.vendor) filter.vendor = req.query.vendor;
+        orders = await db.query('work_orders', filter);
+      } else {
+        orders = await db.getAll('work_orders');
+      }
+      res.json(paginate(orders, req));
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -21,10 +29,15 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', validate({
+    desc: { required: true, type: 'string', maxLen: 500 },
+    loc: { type: 'string', maxLen: 200 },
+    vendor: { type: 'string', maxLen: 200 },
+    pr: { type: 'string', allowed: ['High', 'Medium', 'Low'] },
+    amt: { type: 'string', maxLen: 30 }
+  }), async (req, res) => {
     try {
       const { desc, loc, vendor, pr, amt } = req.body;
-      if (!desc) return res.status(400).json({ error: 'Description required' });
       const all = await db.getAll('work_orders');
       const wo = {
         id: 'WO-' + (101 + all.length),
@@ -37,7 +50,7 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', stripFields('id'), async (req, res) => {
     try {
       const updated = await db.update('work_orders', req.params.id, req.body);
       if (!updated) return res.status(404).json({ error: 'Work order not found' });
@@ -46,10 +59,11 @@ module.exports = function(db) {
   });
 
   // PATCH /api/work-orders/:id/status — Status transition
-  router.patch('/:id/status', async (req, res) => {
+  router.patch('/:id/status', validate({
+    status: { required: true, type: 'string', allowed: ['Pending', 'In Progress', 'Completed', 'Cancelled'] }
+  }), async (req, res) => {
     try {
       const { status } = req.body;
-      if (!status) return res.status(400).json({ error: 'Status required' });
       const wo = await db.getById('work_orders', req.params.id);
       if (!wo) return res.status(404).json({ error: 'Work order not found' });
 
