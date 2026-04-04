@@ -529,7 +529,7 @@ function selectPaymentMethod(method) {
   if (show) show.style.display = 'block';
 }
 
-function processGatewayPayment(billType, billId) {
+async function processGatewayPayment(billType, billId) {
   if (!_selectedPaymentMethod) { toast('Please select a payment method', 'error'); return; }
 
   // Validate based on method
@@ -552,7 +552,107 @@ function processGatewayPayment(billType, billId) {
     btn.style.opacity = '0.7';
   }
 
-  // Simulate payment processing (1.5 second delay)
+  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'E-Wallet', qr: 'DuitNow QR' };
+  var payMethod = _selectedPaymentMethod;
+
+  // ---- TRY REAL STRIPE INTEGRATION FIRST ----
+  if (_useAPI && billType === 'rent') {
+    try {
+      // Check if Stripe is configured on the server
+      var status = await apiFetch('/payments/status');
+      if (status && status.configured) {
+        // Map frontend method to Stripe payment_method_types
+        var stripeMethods = [];
+        if (payMethod === 'fpx') stripeMethods = ['fpx'];
+        else if (payMethod === 'card') stripeMethods = ['card'];
+        else if (payMethod === 'ewallet') stripeMethods = ['grabpay'];
+        else stripeMethods = ['fpx', 'card', 'grabpay'];
+
+        // Create PaymentIntent via backend
+        var intent = await apiFetch('/payments/create-intent', {
+          method: 'POST',
+          body: JSON.stringify({ billId: billId, paymentMethods: stripeMethods })
+        });
+
+        if (intent && intent.clientSecret) {
+          // Load Stripe.js if not already loaded
+          if (!window.Stripe) {
+            var stripeScript = document.createElement('script');
+            stripeScript.src = 'https://js.stripe.com/v3/';
+            document.head.appendChild(stripeScript);
+            await new Promise(function(resolve) { stripeScript.onload = resolve; stripeScript.onerror = resolve; });
+          }
+
+          if (window.Stripe) {
+            // Stripe.js loaded — use it to redirect to payment page
+            var stripeKey = status.publishableKey || '';
+            if (stripeKey) {
+              var stripe = Stripe(stripeKey);
+              // For FPX, redirect to bank selection
+              if (payMethod === 'fpx') {
+                var bankVal = document.getElementById('pgBankSel') ? document.getElementById('pgBankSel').value.toLowerCase().replace(/\s+/g, '_') : '';
+                var fpxResult = await stripe.confirmFpxPayment(intent.clientSecret, {
+                  payment_method: { fpx: { bank: bankVal } },
+                  return_url: window.location.origin + window.location.pathname + '?payment_success=' + billId
+                });
+                if (fpxResult.error) {
+                  toast('Payment error: ' + fpxResult.error.message, 'error');
+                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
+                  return;
+                }
+                // FPX redirects to bank page — user won't see below
+                return;
+              }
+
+              // For card payments
+              if (payMethod === 'card') {
+                var cardResult = await stripe.confirmCardPayment(intent.clientSecret, {
+                  payment_method: {
+                    card: { token: 'tok_visa' }, // In production, use Stripe Elements
+                    billing_details: { name: document.getElementById('pgCardName') ? document.getElementById('pgCardName').value : '' }
+                  }
+                });
+                if (cardResult.error) {
+                  toast('Payment error: ' + cardResult.error.message, 'error');
+                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
+                  return;
+                }
+                if (cardResult.paymentIntent && cardResult.paymentIntent.status === 'succeeded') {
+                  // Confirm with backend
+                  await apiFetch('/payments/confirm/' + billId, {
+                    method: 'POST',
+                    body: JSON.stringify({ paymentIntentId: cardResult.paymentIntent.id })
+                  });
+                  showPaymentReceipt(billType, billId, payMethod, methodNames);
+                  return;
+                }
+              }
+
+              // For GrabPay (e-wallet)
+              if (payMethod === 'ewallet') {
+                var grabResult = await stripe.confirmGrabPayPayment(intent.clientSecret, {
+                  return_url: window.location.origin + window.location.pathname + '?payment_success=' + billId
+                });
+                if (grabResult.error) {
+                  toast('Payment error: ' + grabResult.error.message, 'error');
+                  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock"></i> Pay'; btn.style.opacity = '1'; }
+                  return;
+                }
+                // GrabPay redirects to app/page — user won't see below
+                return;
+              }
+            }
+          }
+        }
+        // If we got here with Stripe configured but something didn't work, fall through to simulation
+        console.warn('[Payment] Stripe configured but redirect not possible, falling back to simulation');
+      }
+    } catch(e) {
+      console.warn('[Payment] Stripe integration error, falling back to simulation:', e.message);
+    }
+  }
+
+  // ---- SIMULATION FALLBACK (no Stripe configured, or demo mode) ----
   setTimeout(function() {
     if (billType === 'rent') {
       var bill = BILLS.find(function(b) { return b.id === billId; });
@@ -569,33 +669,34 @@ function processGatewayPayment(billType, billId) {
     }
     saveData();
     closeModal();
-
-    // Show success receipt
-    var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'E-Wallet', qr: 'DuitNow QR' };
-    var receiptHtml = '<div style="text-align:center;padding:20px">' +
-      '<div style="width:64px;height:64px;border-radius:50%;background:#00B89422;color:#00B894;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px"><i class="fas fa-check"></i></div>' +
-      '<h3 style="color:#00B894;margin-bottom:4px">Payment Successful!</h3>' +
-      '<div style="font-size:11px;color:var(--t3);margin-bottom:18px">Transaction completed via ' + (methodNames[_selectedPaymentMethod] || 'Online') + '</div>' +
-      '<div class="dep-card">' +
-      depRow('Bill ID', billId) +
-      depRow('Amount', 'RM ' + (billType === 'rent' ? (parseInt((BILLS.find(function(b){return b.id===billId;})||{a:'0'}).a.replace(/[^\d]/g,''))||0).toFixed(2) : ((UTILITY_BILLS.find(function(b){return b.id===billId;})||{total:0}).total).toFixed(2))) +
-      depRow('Method', methodNames[_selectedPaymentMethod] || 'Online') +
-      depRow('Date', new Date().toLocaleDateString('en-MY')) +
-      depRow('Time', new Date().toLocaleTimeString('en-MY')) +
-      depRowHtml('Status', '<span class="bs b-ok">Paid</span>') +
-      depRow('Ref No.', 'WS-' + Date.now().toString(36).toUpperCase()) +
-      '</div></div>';
-
-    setTimeout(function() {
-      openModal('<i class="fas fa-receipt" style="color:#00B894"></i> Payment Receipt', receiptHtml,
-        '<button class="btn btn-ghost" onclick="closeModal();navigateTo(\'my-bills\')">Done</button>' +
-        '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print Receipt</button>', 'sm');
-    }, 200);
-
-    toast('Payment successful!', 'success');
-    pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[_selectedPaymentMethod] || 'Online'));
+    showPaymentReceipt(billType, billId, payMethod, methodNames);
+    toast('Payment successful! (Demo mode — no real charges)', 'success');
+    pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[payMethod] || 'Online'));
     _selectedPaymentMethod = '';
   }, 1500);
+}
+
+// Shared receipt display for both real and simulated payments
+function showPaymentReceipt(billType, billId, payMethod, methodNames) {
+  var receiptHtml = '<div style="text-align:center;padding:20px">' +
+    '<div style="width:64px;height:64px;border-radius:50%;background:#00B89422;color:#00B894;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px"><i class="fas fa-check"></i></div>' +
+    '<h3 style="color:#00B894;margin-bottom:4px">Payment Successful!</h3>' +
+    '<div style="font-size:11px;color:var(--t3);margin-bottom:18px">Transaction completed via ' + (methodNames[payMethod] || 'Online') + '</div>' +
+    '<div class="dep-card">' +
+    depRow('Bill ID', billId) +
+    depRow('Amount', 'RM ' + (billType === 'rent' ? (parseInt((BILLS.find(function(b){return b.id===billId;})||{a:'0'}).a.replace(/[^\d]/g,''))||0).toFixed(2) : ((UTILITY_BILLS.find(function(b){return b.id===billId;})||{total:0}).total).toFixed(2))) +
+    depRow('Method', methodNames[payMethod] || 'Online') +
+    depRow('Date', new Date().toLocaleDateString('en-MY')) +
+    depRow('Time', new Date().toLocaleTimeString('en-MY')) +
+    depRowHtml('Status', '<span class="bs b-ok">Paid</span>') +
+    depRow('Ref No.', 'WS-' + Date.now().toString(36).toUpperCase()) +
+    '</div></div>';
+
+  setTimeout(function() {
+    openModal('<i class="fas fa-receipt" style="color:#00B894"></i> Payment Receipt', receiptHtml,
+      '<button class="btn btn-ghost" onclick="closeModal();navigateTo(\'my-bills\')">Done</button>' +
+      '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print Receipt</button>', 'sm');
+  }, 200);
 }
 
 // Pay All Outstanding Bills at once

@@ -5,6 +5,24 @@ let currentPage = null;
 
 // ---- PAGE ROUTER ----
 const PAGE_MAP = {
+  admin: {
+    'dashboard': operatorDashboard,
+    'properties': operatorProperties,
+    'tenants': operatorTenants,
+    'landlords': operatorLandlords,
+    'contracts': operatorContracts,
+    'billing': operatorBilling,
+    'maintenance': operatorMaintenance,
+    'vendors': operatorVendors,
+    'iot': operatorIoT,
+    'leads': operatorLeads,
+    'community': operatorCommunity,
+    'ai': operatorAI,
+    'reports': operatorReports,
+    'settings': adminSettings,
+    'users': adminUsers,
+    'audit': adminAudit
+  },
   operator: {
     'dashboard': operatorDashboard,
     'properties': operatorProperties,
@@ -63,28 +81,104 @@ const PAGE_MAP = {
   }
 };
 
-// ---- LOGIN ----
+// ---- LOGIN (JWT Auth) ----
 (function initLogin() {
-  const roleGrid = document.getElementById('roleGrid');
   const loginBtn = document.getElementById('loginBtn');
-  let selectedRole = 'operator';
+  const passInput = document.getElementById('loginPass');
 
-  roleGrid.addEventListener('click', function(e) {
-    const btn = e.target.closest('.role-btn');
-    if (!btn) return;
-    roleGrid.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedRole = btn.dataset.role;
+  // Auto-login if token is still valid
+  const token = getAuthToken();
+  const user = getCurrentUser();
+  if (token && user) {
+    if (token.startsWith('demo_')) {
+      // Demo mode token — skip API verification, login directly
+      _useAPI = false;
+      _currentUser = user;
+      loginAs(user.role);
+    } else {
+      // Real JWT — verify with backend
+      apiFetch('/auth/me').then(function(me) {
+        if (me) {
+          _currentUser = me;
+          loginAs(me.role);
+        } else {
+          clearAuth();
+        }
+      });
+    }
+  }
+
+  loginBtn.addEventListener('click', doLogin);
+  passInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doLogin();
   });
 
-  loginBtn.addEventListener('click', function() {
-    loginAs(selectedRole);
-  });
+  // Demo credentials for offline/GitHub Pages fallback (no backend)
+  const DEMO_ACCOUNTS = {
+    admin:    { password: 'admin123456', role: 'admin', name: 'System Admin', email: 'admin@westay.my' },
+    operator: { password: 'op123456', role: 'operator', name: 'Site Operator', email: 'operator@westay.my' },
+    sarah:    { password: 'tenant123', role: 'tenant', name: 'Sarah Lim', email: 'sarah@email.com' },
+    landlord: { password: 'landlord123', role: 'landlord', name: 'Tan Sri Ahmad', email: 'tansri@email.com' },
+    vendor:   { password: 'vendor123', role: 'vendor', name: 'QuickFix Plumbing', email: 'admin@quickfix.my' },
+    agent:    { password: 'agent123', role: 'agent', name: 'Marcus Tan', email: 'marcus@realty.my' }
+  };
+
+  async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPass').value;
+    const remember = document.getElementById('rememberMe').checked;
+    const errDiv = document.getElementById('loginError');
+
+    if (!username || !password) {
+      errDiv.querySelector('span').textContent = 'Please enter username and password';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+
+    // Try backend API first
+    const result = await apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+
+    loginBtn.disabled = false;
+    loginBtn.innerHTML = '<i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In';
+
+    if (result && result.token) {
+      // Backend available — use real JWT
+      errDiv.style.display = 'none';
+      setAuthToken(result.token, result.user, remember);
+      loginAs(result.user.role);
+      return;
+    }
+
+    // Backend unavailable (result === null) — try demo mode fallback
+    if (result === null) {
+      const demo = DEMO_ACCOUNTS[username];
+      if (demo && demo.password === password) {
+        const demoUser = { id: 'demo-' + username, username: username, role: demo.role, name: demo.name, email: demo.email };
+        const demoToken = 'demo_' + btoa(JSON.stringify(demoUser));
+        errDiv.style.display = 'none';
+        _useAPI = false; // Switch to localStorage-only mode
+        setAuthToken(demoToken, demoUser, remember);
+        loginAs(demo.role);
+        return;
+      }
+    }
+
+    // Both failed — show error
+    errDiv.querySelector('span').textContent = (result && result.error) || 'Login failed. Check credentials.';
+    errDiv.style.display = 'block';
+  }
 })();
 
 function loginAs(role) {
   currentRole = role;
   const cfg = ROLE_CONFIG[role];
+  const user = getCurrentUser();
 
   // Hide login, show app
   document.getElementById('loginPage').classList.add('hidden');
@@ -98,6 +192,12 @@ function loginAs(role) {
   roleTag.textContent = cfg.label;
   roleTag.style.background = cfg.bg;
   roleTag.style.color = cfg.color;
+
+  // Override user info from JWT if available
+  if (user) {
+    cfg.user.name = user.name || cfg.user.name;
+    cfg.user.initials = (user.name || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || cfg.user.initials;
+  }
 
   // Build sidebar
   buildSidebar(cfg);
@@ -160,13 +260,13 @@ function navigateTo(pageId) {
 // ---- POST-RENDER HOOKS (charts, dynamic content) ----
 function afterRender(pageId) {
   // Revenue chart
-  if (pageId === 'dashboard' && currentRole === 'operator') {
+  if (pageId === 'dashboard' && (currentRole === 'operator' || currentRole === 'admin')) {
     renderRevChart();
     renderOccBars();
   }
 
   // AI Insights
-  if (pageId === 'ai' && currentRole === 'operator') {
+  if (pageId === 'ai' && (currentRole === 'operator' || currentRole === 'admin')) {
     renderPriceEngine();
     renderTenantScore();
     renderWorkflows();
@@ -283,6 +383,7 @@ function renderFeed() {
 
 // ---- LOGOUT ----
 function logout() {
+  clearAuth();
   currentRole = null;
   currentPage = null;
   document.body.className = '';
@@ -291,6 +392,9 @@ function logout() {
   document.getElementById('sidebar').innerHTML = '';
   document.getElementById('mainContent').innerHTML = '';
 }
+
+// Alias for auto-logout on 401
+function doLogout() { logout(); }
 
 // ---- WORKFLOW TOGGLES ----
 document.addEventListener('click', function(e) {
@@ -326,6 +430,21 @@ document.addEventListener('keydown', function(e) {
 function quickAdd() {
   if (!currentRole) return;
   const opts = {
+    admin: [
+      { icon:'fa-building', label:'Add Property', fn:'addPropertyModal()' },
+      { icon:'fa-user-plus', label:'Add Tenant', fn:'addTenantModal()' },
+      { icon:'fa-wrench', label:'New Ticket', fn:'addTicketModal()' },
+      { icon:'fa-file-signature', label:'New Contract', fn:'addContractModal()' },
+      { icon:'fa-user-tie', label:'Add Vendor', fn:'addVendorModal()' },
+      { icon:'fa-funnel-dollar', label:'Add Lead', fn:'addLeadModal()' },
+      { icon:'fa-users-cog', label:'User Management', fn:'navigateTo(\\\'users\\\')' },
+      { icon:'fa-robot', label:'Automation Center', fn:'showAutomationDashboard()' },
+      { icon:'fa-chart-bar', label:'Generate Report', fn:'autoGenerateReport()' },
+      { icon:'fa-file-contract', label:'Generate TA', fn:'autoGenerateTA()' },
+      { icon:'fa-file-alt', label:'Owner Report', fn:'generateOwnerReport()' },
+      { icon:'fa-bolt', label:'Utility Bills', fn:'showUtilityBillList()' },
+      { icon:'fa-clipboard-check', label:'Check-In/Out', fn:'showCheckInOutList()' }
+    ],
     operator: [
       { icon:'fa-building', label:'Add Property', fn:'addPropertyModal()' },
       { icon:'fa-user-plus', label:'Add Tenant', fn:'addTenantModal()' },

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://js.stripe.com; img-src 'self' data: blob:; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com">
 <title>WeStay Coliving — Management Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -20,50 +20,29 @@
       <p>Comprehensive Property Management &amp; Collaboration</p>
     </div>
     <div class="login-card">
-      <h3>Select Your Role to Continue</h3>
-      <div class="role-grid" id="roleGrid">
-        <div class="role-btn op active" data-role="operator">
-          <div class="role-icon"><i class="fas fa-cogs"></i></div>
-          <div class="role-name">Operator</div>
-          <div class="role-desc">Manage all properties &amp; operations</div>
-        </div>
-        <div class="role-btn tn" data-role="tenant">
-          <div class="role-icon"><i class="fas fa-user"></i></div>
-          <div class="role-name">Tenant</div>
-          <div class="role-desc">Pay rent, request maintenance</div>
-        </div>
-        <div class="role-btn ll" data-role="landlord">
-          <div class="role-icon"><i class="fas fa-home"></i></div>
-          <div class="role-name">Landlord</div>
-          <div class="role-desc">View property performance &amp; payouts</div>
-        </div>
-        <div class="role-btn vn" data-role="vendor">
-          <div class="role-icon"><i class="fas fa-tools"></i></div>
-          <div class="role-name">Vendor</div>
-          <div class="role-desc">Manage work orders &amp; invoices</div>
-        </div>
-        <div class="role-btn ag" data-role="agent">
-          <div class="role-icon"><i class="fas fa-user-tie"></i></div>
-          <div class="role-name">Agent</div>
-          <div class="role-desc">Manage leads &amp; tenancy listings</div>
-        </div>
-      </div>
+      <h3>Sign In to Continue</h3>
+      <div id="loginError" style="display:none;color:#E17055;background:#fff5f5;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;border:1px solid #fecdd2"><i class="fas fa-exclamation-circle"></i> <span></span></div>
       <div class="field">
-        <label>Email Address</label>
-        <input type="email" id="loginEmail" placeholder="your@email.com" value="demo@westay.my">
+        <label>Username</label>
+        <input type="text" id="loginUsername" placeholder="e.g. admin, operator, sarah" value="admin" autocomplete="username">
       </div>
       <div class="field">
         <label>Password</label>
-        <input type="password" id="loginPass" placeholder="Enter your password" value="demo1234">
-        <div class="hint">Demo: any email + any password works</div>
+        <input type="password" id="loginPass" placeholder="Enter your password" value="admin123456" autocomplete="current-password">
       </div>
       <div class="login-opts">
-        <label><input type="checkbox" checked> Remember me</label>
+        <label><input type="checkbox" id="rememberMe" checked> Remember me</label>
         <a>Forgot password?</a>
       </div>
       <button class="btn-login" id="loginBtn"><i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In</button>
-      <div class="login-footer">
-        Don't have an account? <a>Contact your property manager</a>
+      <div class="login-footer" style="margin-top:16px;font-size:12px;color:#999;line-height:1.6">
+        <strong>Demo Accounts:</strong><br>
+        <code>admin</code> / <code>admin123456</code> &nbsp;|&nbsp;
+        <code>operator</code> / <code>op123456</code><br>
+        <code>sarah</code> / <code>tenant123</code> &nbsp;|&nbsp;
+        <code>landlord</code> / <code>landlord123</code><br>
+        <code>vendor</code> / <code>vendor123</code> &nbsp;|&nbsp;
+        <code>agent</code> / <code>agent123</code>
       </div>
     </div>
   </div>

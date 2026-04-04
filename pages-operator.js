@@ -525,12 +525,194 @@ function operatorSettings() {
     settingsAutoItem('fa-fingerprint', '#FD79A8', 'Smart Lock Auto-Disable', 'Fingerprint off on lease end', 'smartLockExpiry') +
     settingsAutoItem('fa-bolt', '#FDCB6E', 'Late Payment Electric Cut', 'Room sub-meter off after 7 days overdue (per-room)', 'latePmtElectric') +
     '</div></div>' +
+    '<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Data Export</h3></div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+    '<button class="btn btn-ghost" onclick="exportTenants()"><i class="fas fa-download"></i> Export Tenants</button>' +
+    '<button class="btn btn-ghost" onclick="exportBills()"><i class="fas fa-download"></i> Export Bills</button>' +
+    '<button class="btn btn-ghost" onclick="exportTickets()"><i class="fas fa-download"></i> Export Tickets</button></div></div>';
+}
+
+// ============ ADMIN-ONLY PAGES ============
+
+function adminSettings() {
+  return '<div class="pg-h"><h1>Admin Settings</h1><p>Full platform configuration & data management</p></div>' +
+    '<div class="g2">' +
+    panel('General', settingsGeneral()) +
+    panel('Notifications', settingsNotif()) +
+    '</div>' +
+    '<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Automations</h3><button class="btn-s" onclick="showAutomationDashboard()"><i class="fas fa-cog"></i> Configure</button></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+    settingsAutoItem('fa-chart-bar', '#6C5CE7', 'Auto-Generate Reports', 'Monthly portfolio reports', 'autoReport') +
+    settingsAutoItem('fa-file-contract', '#00CEC9', 'Auto-Generate TA', 'Tenancy agreements on renewal', 'autoTA') +
+    settingsAutoItem('fa-fingerprint', '#FD79A8', 'Smart Lock Auto-Disable', 'Fingerprint off on lease end', 'smartLockExpiry') +
+    settingsAutoItem('fa-bolt', '#FDCB6E', 'Late Payment Electric Cut', 'Room sub-meter off after 7 days overdue (per-room)', 'latePmtElectric') +
+    '</div></div>' +
     '<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Data Management</h3></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
     '<button class="btn btn-ghost" onclick="exportTenants()"><i class="fas fa-download"></i> Export Tenants</button>' +
     '<button class="btn btn-ghost" onclick="exportBills()"><i class="fas fa-download"></i> Export Bills</button>' +
     '<button class="btn btn-ghost" onclick="exportTickets()"><i class="fas fa-download"></i> Export Tickets</button>' +
     '<button class="btn" style="background:var(--err);color:#fff" onclick="resetAllData()"><i class="fas fa-undo"></i> Reset Demo Data</button></div></div>';
+}
+
+function adminUsers() {
+  let html = '<div class="pg-h"><h1>User Management</h1><p>Manage platform user accounts</p>' +
+    '<button class="btn" onclick="adminAddUserModal()"><i class="fas fa-user-plus"></i> Add User</button></div>';
+
+  html += '<div class="panel"><div class="panel-h"><h3>All Users</h3>' +
+    '<button class="btn-s" onclick="adminLoadUsers()"><i class="fas fa-sync-alt"></i> Refresh</button></div>' +
+    '<div id="adminUserList" style="color:var(--t3);padding:20px;text-align:center"><i class="fas fa-spinner fa-spin"></i> Loading users...</div></div>';
+
+  // Auto-load users after render
+  setTimeout(function() { adminLoadUsers(); }, 100);
+  return html;
+}
+
+function adminLoadUsers() {
+  apiFetch('/auth/users').then(function(users) {
+    const el = document.getElementById('adminUserList');
+    if (!el) return;
+    if (!users || users.error) {
+      el.innerHTML = '<div style="color:var(--err)"><i class="fas fa-exclamation-circle"></i> ' + escHtml((users && users.error) || 'Failed to load users') + '</div>';
+      return;
+    }
+    if (!users.length) {
+      el.innerHTML = '<div style="color:var(--t3)">No users found</div>';
+      return;
+    }
+    let tbl = '<table class="tbl"><thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Last Login</th><th>Actions</th></tr></thead><tbody>';
+    users.forEach(function(u) {
+      const roleColors = { admin:'#E84393', operator:'#6C5CE7', tenant:'#00CEC9', landlord:'#FD79A8', vendor:'#00B894', agent:'#FDCB6E' };
+      const rc = roleColors[u.role] || '#A7A5C6';
+      tbl += '<tr><td>' + u.id + '</td><td><strong>' + escHtml(u.username) + '</strong></td><td>' + escHtml(u.name) + '</td>' +
+        '<td><span class="bs" style="background:' + rc + '22;color:' + rc + '">' + escHtml(u.role) + '</span></td>' +
+        '<td>' + escHtml(u.email || '-') + '</td>' +
+        '<td>' + (u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never') + '</td>' +
+        '<td><button class="btn-s" style="background:var(--err);color:#fff" onclick="adminDeleteUser(' + u.id + ',\'' + escHtml(u.username) + '\')"><i class="fas fa-trash"></i></button></td></tr>';
+    });
+    tbl += '</tbody></table>';
+    el.innerHTML = tbl;
+  });
+}
+
+function adminAddUserModal() {
+  const roles = ['admin', 'operator', 'tenant', 'landlord', 'vendor', 'agent'];
+  let roleOpts = roles.map(function(r) { return '<option value="' + r + '">' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>'; }).join('');
+  const body = '<div style="display:grid;gap:12px">' +
+    '<div><label style="font-size:11px;color:var(--t3)">Username</label><input id="newUserUsername" class="inp" placeholder="username"></div>' +
+    '<div><label style="font-size:11px;color:var(--t3)">Password</label><input id="newUserPassword" class="inp" type="password" placeholder="min 6 chars"></div>' +
+    '<div><label style="font-size:11px;color:var(--t3)">Full Name</label><input id="newUserName" class="inp" placeholder="Full name"></div>' +
+    '<div><label style="font-size:11px;color:var(--t3)">Role</label><select id="newUserRole" class="inp">' + roleOpts + '</select></div>' +
+    '<div><label style="font-size:11px;color:var(--t3)">Email</label><input id="newUserEmail" class="inp" placeholder="email@example.com"></div>' +
+    '<div><label style="font-size:11px;color:var(--t3)">Phone</label><input id="newUserPhone" class="inp" placeholder="+60 12-345 6789"></div>' +
+    '</div>';
+  const footer = '<button class="btn" onclick="adminCreateUser()"><i class="fas fa-user-plus"></i> Create User</button>';
+  openModal('Add New User', body, footer, 'sm');
+}
+
+function adminCreateUser() {
+  const data = {
+    username: document.getElementById('newUserUsername').value.trim(),
+    password: document.getElementById('newUserPassword').value,
+    name: document.getElementById('newUserName').value.trim(),
+    role: document.getElementById('newUserRole').value,
+    email: document.getElementById('newUserEmail').value.trim() || undefined,
+    phone: document.getElementById('newUserPhone').value.trim() || undefined
+  };
+  if (!data.username || !data.password || !data.name) {
+    toast('Username, password, and name are required', 'error');
+    return;
+  }
+  apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(data) }).then(function(res) {
+    if (res && !res.error) {
+      closeModal();
+      toast('User created: ' + escHtml(res.username), 'success');
+      adminLoadUsers();
+    } else {
+      toast((res && res.error) || 'Failed to create user', 'error');
+    }
+  });
+}
+
+function adminDeleteUser(id, username) {
+  if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
+  apiFetch('/auth/users/' + id, { method: 'DELETE' }).then(function(res) {
+    if (res && res.success) {
+      toast('User deleted', 'success');
+      adminLoadUsers();
+    } else {
+      toast((res && res.error) || 'Failed to delete user', 'error');
+    }
+  });
+}
+
+function adminAudit() {
+  let html = '<div class="pg-h"><h1>Audit Log</h1><p>Track all system changes and user activity</p>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button class="btn-s" onclick="adminLoadAudit()"><i class="fas fa-sync-alt"></i> Refresh</button>' +
+    '<button class="btn-s" onclick="adminExportAudit()"><i class="fas fa-download"></i> Export CSV</button>' +
+    '</div></div>';
+
+  html += '<div class="panel" style="margin-bottom:14px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">' +
+    '<select id="auditAction" class="inp" style="width:auto;min-width:120px" onchange="adminLoadAudit()">' +
+    '<option value="">All Actions</option><option value="create">Create</option><option value="update">Update</option>' +
+    '<option value="delete">Delete</option><option value="login">Login</option></select>' +
+    '<select id="auditEntity" class="inp" style="width:auto;min-width:120px" onchange="adminLoadAudit()">' +
+    '<option value="">All Entities</option><option value="props">Properties</option><option value="tenants">Tenants</option>' +
+    '<option value="bills">Bills</option><option value="tickets">Tickets</option><option value="users">Users</option></select>' +
+    '<input id="auditFrom" class="inp" type="date" style="width:auto" onchange="adminLoadAudit()">' +
+    '<input id="auditTo" class="inp" type="date" style="width:auto" onchange="adminLoadAudit()">' +
+    '</div></div>';
+
+  html += '<div class="panel"><div id="auditList" style="color:var(--t3);padding:20px;text-align:center"><i class="fas fa-spinner fa-spin"></i> Loading audit log...</div></div>';
+
+  setTimeout(function() { adminLoadAudit(); }, 100);
+  return html;
+}
+
+function adminLoadAudit() {
+  let qs = '?limit=100';
+  var action = document.getElementById('auditAction');
+  var entity = document.getElementById('auditEntity');
+  var from = document.getElementById('auditFrom');
+  var to = document.getElementById('auditTo');
+  if (action && action.value) qs += '&action=' + action.value;
+  if (entity && entity.value) qs += '&entity=' + entity.value;
+  if (from && from.value) qs += '&from=' + from.value;
+  if (to && to.value) qs += '&to=' + to.value;
+
+  apiFetch('/audit' + qs).then(function(entries) {
+    const el = document.getElementById('auditList');
+    if (!el) return;
+    if (!entries || entries.error) {
+      el.innerHTML = '<div style="color:var(--err)"><i class="fas fa-exclamation-circle"></i> ' + escHtml((entries && entries.error) || 'Failed to load audit log') + '</div>';
+      return;
+    }
+    var list = Array.isArray(entries) ? entries : (entries.data || []);
+    if (!list.length) {
+      el.innerHTML = '<div style="color:var(--t3)">No audit entries found</div>';
+      return;
+    }
+    let tbl = '<table class="tbl"><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>User</th><th>Details</th></tr></thead><tbody>';
+    list.forEach(function(e) {
+      const actionColors = { create:'#00B894', update:'#6C5CE7', delete:'#E17055', login:'#FDCB6E' };
+      const ac = actionColors[e.action] || '#A7A5C6';
+      tbl += '<tr><td style="white-space:nowrap;font-size:11px">' + new Date(e.timestamp).toLocaleString() + '</td>' +
+        '<td><span class="bs" style="background:' + ac + '22;color:' + ac + '">' + escHtml(e.action) + '</span></td>' +
+        '<td>' + escHtml(e.entity || '-') + (e.entityId ? ' #' + escHtml(String(e.entityId)) : '') + '</td>' +
+        '<td>' + escHtml(e.username || '-') + ' <span style="font-size:10px;color:var(--t3)">(' + escHtml(e.role || '-') + ')</span></td>' +
+        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">' + escHtml(e.details ? JSON.stringify(e.details).slice(0, 80) : '-') + '</td></tr>';
+    });
+    tbl += '</tbody></table>';
+    el.innerHTML = tbl;
+  });
+}
+
+function adminExportAudit() {
+  var token = getAuthToken();
+  if (!token) { toast('Not authenticated', 'error'); return; }
+  var base = window.API_BASE || '/api';
+  window.open(base + '/audit/export?token=' + encodeURIComponent(token), '_blank');
 }
 
 function settingsAutoItem(icon, color, name, desc, key) {

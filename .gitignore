@@ -1,11 +1,23 @@
 # WorkBuddy local config
 .workbuddy/
 
+# Environment secrets
+.env
+
 # Node
 node_modules/
 
-# Server (not needed for GitHub Pages)
-server.js
+# Database files (generated at runtime)
+backend/data/*.db
+
+# Logs (generated at runtime)
+backend/logs/
+
+# File uploads (user content)
+backend/uploads/
+
+# SSL certificates
+certs/
 
 # OS files
 Thumbs.db
