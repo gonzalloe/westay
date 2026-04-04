@@ -2,8 +2,9 @@
 
 > Full-stack SPA for managing co-living properties, tenants, billing, IoT devices, and maintenance workflows.
 
-**Branch: `backend-dev`** — Contains the full backend server (Express 5 + SQLite + JWT Auth).  
-**Branch: `demo`** — Frontend-only, deployed to [GitHub Pages](https://gonzalloe.github.io/westay/) for stakeholder demo.
+**Branch: `staging`** — Full-stack development (Express 5 + SQLite + JWT Auth + frontend).  
+**Branch: `demo`** — Frontend-only, deployed to [GitHub Pages](https://gonzalloe.github.io/westay/) for stakeholder demo.  
+**Branch: `master`** — Production (reserved for stable releases).
 
 ---
 
@@ -19,7 +20,7 @@
 - [Changing the Database Adapter](#changing-the-database-adapter)
 - [IoT & Automations](#iot--automations)
 - [Testing](#testing)
-- [Merging `backend-dev` into `demo`](#merging-backend-dev-into-demo)
+- [Merging `staging` into `demo`](#merging-staging-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
 - [Default Demo Accounts](#default-demo-accounts)
@@ -29,10 +30,10 @@
 ## Quick Start
 
 ```bash
-# Clone and switch to backend branch
+# Clone and switch to staging branch
 git clone https://github.com/gonzalloe/westay.git
 cd westay
-git checkout backend-dev
+git checkout staging
 
 # Install dependencies
 npm install
@@ -829,7 +830,7 @@ npm run test:coverage
 
 ---
 
-## Merging `backend-dev` into `demo`
+## Merging `staging` into `demo`
 
 ### When to Merge
 
@@ -844,17 +845,17 @@ Only merge when you're ready to deploy the full-stack version (i.e., when the st
 git checkout demo
 git pull origin demo
 
-git checkout backend-dev
-git pull origin backend-dev
+git checkout staging
+git pull origin staging
 
-# Merge backend-dev into demo
+# Merge staging into demo
 git checkout demo
-git merge backend-dev
+git merge staging
 
 # Resolve any conflicts (likely in .gitignore, README.md)
 # After resolving:
 git add .
-git commit -m "merge: integrate full-stack backend into demo"
+git commit -m "merge: integrate full-stack from staging into demo"
 git push origin demo
 ```
 
@@ -870,7 +871,7 @@ git push origin demo
 
 ### If You Want to Keep Both Deployment Modes
 
-Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `backend-dev` for full-stack development. The frontend already has an **API-first with localStorage fallback** design — it works both ways automatically.
+Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `staging` for full-stack development. The frontend already has an **API-first with localStorage fallback** design — it works both ways automatically.
 
 ---
 
