@@ -543,66 +543,187 @@ async function processGatewayPayment(billType, billId) {
   }
 
   // ---- SIMULATION FALLBACK (no Stripe configured, demo mode, or GitHub Pages) ----
-  if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  // Show simulated payment method page (FPX bank selection / card form / GrabPay)
+  var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
+  var bill = billType === 'rent' ? BILLS.find(function(b){return b.id===billId;}) : UTILITY_BILLS.find(function(b){return b.id===billId;});
+  var amount = billType === 'rent' ? (parseInt((bill||{a:'0'}).a.replace(/[^\\d]/g,''))||0) : ((bill||{total:0}).total);
+
+  // Simulate redirect delay
+  setTimeout(function() {
+    closeModal();
+    setTimeout(function() {
+      _showSimulatedPaymentPage(payMethod, billType, billId, amount, methodNames);
+    }, 200);
+  }, 800);
+}
+
+// ---- Simulated payment method pages (FPX / Card / GrabPay) ----
+function _showSimulatedPaymentPage(method, billType, billId, amount, methodNames) {
+  var html = '<div style="max-width:440px;margin:0 auto">';
+
+  if (method === 'fpx') {
+    // === FPX BANK SELECTION PAGE ===
+    html += '<div style="background:#003D6B;padding:20px;border-radius:14px;text-align:center;margin-bottom:16px">' +
+      '<div style="font-size:12px;color:#90CAF9;margin-bottom:4px">Powered by</div>' +
+      '<div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:1px">FPX</div>' +
+      '<div style="font-size:10px;color:#90CAF9;margin-top:4px">Financial Process Exchange</div></div>';
+    html += '<div style="padding:14px;background:var(--bg3);border-radius:12px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:10px;color:var(--t3)">Amount to Pay</div>' +
+      '<div style="font-size:24px;font-weight:800;color:var(--p)">RM ' + amount.toFixed(2) + '</div>' +
+      '<div style="font-size:10px;color:var(--t3)">Ref: ' + escHtml(billId) + '</div></div>';
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-university" style="color:#003D6B;margin-right:6px"></i>Select Your Bank</div>';
+    var banks = [
+      { name: 'Maybank2u', color: '#FFC107' },
+      { name: 'CIMB Clicks', color: '#E91E63' },
+      { name: 'Public Bank', color: '#4CAF50' },
+      { name: 'RHB Now', color: '#2196F3' },
+      { name: 'Hong Leong Connect', color: '#009688' },
+      { name: 'AmOnline', color: '#FF5722' },
+      { name: 'Bank Islam', color: '#795548' },
+      { name: 'Bank Rakyat', color: '#607D8B' }
+    ];
+    html += '<div id="fpxBankList" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;max-height:200px;overflow-y:auto">';
+    banks.forEach(function(b, i) {
+      html += '<div class="fpx-bank" data-bank="' + i + '" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border:2px solid transparent;border-radius:10px;cursor:pointer;transition:.2s" onclick="_selectSimBank(this,' + i + ')" onmouseover="this.style.background=\'var(--card)\'" onmouseout="if(!this.classList.contains(\'sel\'))this.style.background=\'var(--bg3)\'">' +
+        '<div style="width:28px;height:28px;border-radius:6px;background:' + b.color + '22;color:' + b.color + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">' + b.name.charAt(0) + '</div>' +
+        '<div style="font-size:11px;font-weight:500">' + b.name + '</div></div>';
+    });
+    html += '</div>';
+    html += '<div style="padding:8px;background:#FFECB322;border-radius:8px;margin-bottom:12px;font-size:10px;color:#F57F17;text-align:center">' +
+      '<i class="fas fa-info-circle" style="margin-right:4px"></i>You will be redirected to your bank\'s secure login page (simulated)</div>';
+  } else if (method === 'card') {
+    // === CARD PAYMENT PAGE ===
+    html += '<div style="background:linear-gradient(135deg,#6C5CE7,#A29BFE);padding:20px;border-radius:14px;text-align:center;margin-bottom:16px">' +
+      '<div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px">' +
+      '<i class="fab fa-cc-visa" style="font-size:28px;color:#fff"></i>' +
+      '<i class="fab fa-cc-mastercard" style="font-size:28px;color:#fff"></i></div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,.7)">Secure Card Payment</div></div>';
+    html += '<div style="padding:14px;background:var(--bg3);border-radius:12px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:10px;color:var(--t3)">Amount to Pay</div>' +
+      '<div style="font-size:24px;font-weight:800;color:var(--p)">RM ' + amount.toFixed(2) + '</div></div>';
+    html += '<div style="font-size:12px;font-weight:600;margin-bottom:10px"><i class="fas fa-credit-card" style="color:#6C5CE7;margin-right:6px"></i>Card Details</div>';
+    html += '<div class="form-group"><label style="font-size:10px;color:var(--t3)">Card Number</label>' +
+      '<input id="simCardNum" type="text" placeholder="4242 4242 4242 4242" maxlength="19" style="font-family:monospace;letter-spacing:2px" oninput="this.value=this.value.replace(/[^0-9 ]/g,\'\').replace(/(\\d{4})(?=\\d)/g,\'$1 \').trim()"></div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '<div class="form-group"><label style="font-size:10px;color:var(--t3)">Expiry</label><input id="simCardExp" type="text" placeholder="MM/YY" maxlength="5" oninput="this.value=this.value.replace(/[^0-9/]/g,\'\');if(this.value.length===2&&!this.value.includes(\'/\'))this.value+=\'/\'"></div>' +
+      '<div class="form-group"><label style="font-size:10px;color:var(--t3)">CVC</label><input id="simCardCvc" type="text" placeholder="123" maxlength="4"></div></div>';
+    html += '<div class="form-group"><label style="font-size:10px;color:var(--t3)">Cardholder Name</label><input id="simCardName" type="text" placeholder="Name on card" value="Demo User"></div>';
+    html += '<div style="padding:8px;background:#E8F5E922;border-radius:8px;margin-bottom:12px;font-size:10px;color:#2E7D32;text-align:center">' +
+      '<i class="fas fa-lock" style="margin-right:4px"></i>256-bit SSL Encryption &bull; PCI DSS Level 1 (simulated)</div>';
+  } else {
+    // === GRABPAY / E-WALLET PAGE ===
+    html += '<div style="background:linear-gradient(135deg,#00B14F,#00D959);padding:20px;border-radius:14px;text-align:center;margin-bottom:16px">' +
+      '<div style="font-size:28px;color:#fff;margin-bottom:4px"><i class="fas fa-mobile-alt"></i></div>' +
+      '<div style="font-size:20px;font-weight:800;color:#fff">GrabPay</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,.7)">E-Wallet Payment</div></div>';
+    html += '<div style="padding:14px;background:var(--bg3);border-radius:12px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:10px;color:var(--t3)">Amount to Pay</div>' +
+      '<div style="font-size:24px;font-weight:800;color:var(--p)">RM ' + amount.toFixed(2) + '</div>' +
+      '<div style="font-size:10px;color:var(--t3)">Ref: ' + escHtml(billId) + '</div></div>';
+    html += '<div style="padding:16px;background:var(--bg3);border-radius:12px;margin-bottom:14px;text-align:center">' +
+      '<div style="font-size:48px;margin-bottom:8px"><i class="fas fa-wallet" style="color:#00B14F"></i></div>' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Confirm Payment</div>' +
+      '<div style="font-size:11px;color:var(--t3)">Tap the button below to authorize payment from your GrabPay wallet</div></div>';
+    html += '<div style="padding:8px;background:#E8F5E922;border-radius:8px;margin-bottom:12px;font-size:10px;color:#2E7D32;text-align:center">' +
+      '<i class="fas fa-shield-alt" style="margin-right:4px"></i>Secured by GrabPay (simulated)</div>';
+  }
+
+  html += '</div>';
+
+  var title = method === 'fpx' ? '<i class="fas fa-university" style="color:#003D6B"></i> FPX Online Banking' :
+    method === 'card' ? '<i class="fas fa-credit-card" style="color:#6C5CE7"></i> Card Payment' :
+    '<i class="fas fa-mobile-alt" style="color:#00B14F"></i> GrabPay';
+
+  var confirmLabel = method === 'fpx' ? '<i class="fas fa-sign-in-alt"></i> Login to Bank & Pay' :
+    method === 'card' ? '<i class="fas fa-lock"></i> Pay RM ' + amount.toFixed(2) :
+    '<i class="fas fa-check-circle"></i> Authorize Payment';
+
+  openModal(title, html,
+    '<button class="btn btn-ghost" onclick="closeModal();toast(\'Payment cancelled\',\'info\')">Cancel</button>' +
+    '<button class="btn btn-p" id="simPayConfirmBtn" onclick="_confirmSimPayment(\'' + method + '\',\'' + billType + '\',\'' + billId + '\')" style="min-width:180px">' + confirmLabel + '</button>', 'sm');
+}
+
+var _simSelectedBank = -1;
+function _selectSimBank(el, idx) {
+  _simSelectedBank = idx;
+  document.querySelectorAll('.fpx-bank').forEach(function(b) { b.style.borderColor = 'transparent'; b.style.background = 'var(--bg3)'; b.classList.remove('sel'); });
+  el.style.borderColor = '#003D6B'; el.style.background = 'var(--card)'; el.classList.add('sel');
+}
+
+async function _confirmSimPayment(method, billType, billId) {
+  // Validate inputs
+  if (method === 'fpx' && _simSelectedBank < 0) { toast('Please select a bank', 'error'); return; }
+  if (method === 'card') {
+    var num = (document.getElementById('simCardNum') || {}).value || '';
+    var exp = (document.getElementById('simCardExp') || {}).value || '';
+    var cvc = (document.getElementById('simCardCvc') || {}).value || '';
+    if (num.replace(/\s/g, '').length < 13) { toast('Enter a valid card number', 'error'); return; }
+    if (exp.length < 4) { toast('Enter card expiry', 'error'); return; }
+    if (cvc.length < 3) { toast('Enter CVC code', 'error'); return; }
+  }
+
+  // Show processing
+  var btn = document.getElementById('simPayConfirmBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; btn.style.opacity = '0.7'; }
+
   var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
 
-  setTimeout(async function() {
-    // Use proper API endpoints if server is available (persists to DB)
-    if (_useAPI) {
-      try {
-        var endpoint = billType === 'rent' ? '/bills/' + billId + '/pay' : '/utility-bills/' + billId + '/pay';
-        var result = await apiFetch(endpoint, { method: 'PATCH' });
-        if (result) {
-          // Update in-memory data from API response
-          if (billType === 'rent') {
-            var bill = BILLS.find(function(b) { return b.id === billId; });
-            if (bill) bill.s = 'Paid';
-            // Auto-reconnect handled server-side; sync local state
-            if (result.reconnected) {
-              var meter = ELECTRIC_METERS.find(function(m) { return m.meterId === result.reconnected.meterId; });
-              if (meter) meter.status = 'Connected';
-              toast('Electric auto-reconnected for Room ' + result.reconnected.room, 'success');
-            }
-            if (result.lockReEnabled) {
-              var lock = SMART_LOCK_REGISTRY.find(function(l) { return l.tenant === result.lockReEnabled.tenant; });
-              if (lock) { lock.status = 'Active'; lock.fingerprints = 2; }
-            }
-          } else {
-            var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
-            if (ubill) ubill.status = 'Paid';
-          }
-          closeModal();
-          showPaymentReceipt(billType, billId, payMethod, methodNames);
-          toast('Payment successful!', 'success');
-          pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[payMethod] || 'Online'));
-          _selectedPaymentMethod = '';
-          return;
-        }
-      } catch(e) {
-        console.warn('[Payment] API pay failed, falling back to local:', e.message);
-      }
-    }
+  // Simulate bank/provider processing delay
+  await new Promise(function(r) { setTimeout(r, 2000); });
 
-    // Offline / GitHub Pages fallback — update locally
-    if (billType === 'rent') {
-      var bill = BILLS.find(function(b) { return b.id === billId; });
-      if (bill) {
-        bill.s = 'Paid';
-        if (typeof payBillWithAutoReconnect === 'function') {
-          payBillWithAutoReconnect(billId);
+  // Try API first (server running)
+  if (_useAPI) {
+    try {
+      var endpoint = billType === 'rent' ? '/bills/' + billId + '/pay' : '/utility-bills/' + billId + '/pay';
+      var result = await apiFetch(endpoint, { method: 'PATCH' });
+      if (result) {
+        if (billType === 'rent') {
+          var bill = BILLS.find(function(b) { return b.id === billId; });
+          if (bill) bill.s = 'Paid';
+          if (result.reconnected) {
+            var meter = ELECTRIC_METERS.find(function(m) { return m.meterId === result.reconnected.meterId; });
+            if (meter) meter.status = 'Connected';
+            toast('Electric auto-reconnected for Room ' + result.reconnected.room, 'success');
+          }
+          if (result.lockReEnabled) {
+            var lock = SMART_LOCK_REGISTRY.find(function(l) { return l.tenant === result.lockReEnabled.tenant; });
+            if (lock) { lock.status = 'Active'; lock.fingerprints = 2; }
+          }
+        } else {
+          var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+          if (ubill) ubill.status = 'Paid';
         }
+        closeModal();
+        showPaymentReceipt(billType, billId, method, methodNames);
+        toast('Payment successful!', 'success');
+        pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[method] || 'Online'));
+        _selectedPaymentMethod = '';
+        _simSelectedBank = -1;
+        return;
       }
-    } else {
-      var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
-      if (ubill) ubill.status = 'Paid';
+    } catch(e) {
+      console.warn('[Payment] API pay failed, falling back to local:', e.message);
     }
-    saveData();
-    closeModal();
-    showPaymentReceipt(billType, billId, payMethod, methodNames);
-    toast('Payment successful!', 'success');
-    pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[payMethod] || 'Online'));
-    _selectedPaymentMethod = '';
-  }, 1500);
+  }
+
+  // Offline / GitHub Pages fallback — update locally
+  if (billType === 'rent') {
+    var bill2 = BILLS.find(function(b) { return b.id === billId; });
+    if (bill2) {
+      bill2.s = 'Paid';
+      if (typeof payBillWithAutoReconnect === 'function') payBillWithAutoReconnect(billId);
+    }
+  } else {
+    var ubill2 = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+    if (ubill2) ubill2.status = 'Paid';
+  }
+  saveData();
+  closeModal();
+  showPaymentReceipt(billType, billId, method, methodNames);
+  toast('Payment successful!', 'success');
+  pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[method] || 'Online'));
+  _selectedPaymentMethod = '';
+  _simSelectedBank = -1;
 }
 
 // Shared receipt display for both real and simulated payments
