@@ -163,9 +163,14 @@ const PAGE_MAP = {
       });
       if (res.ok) {
         result = await res.json();
-      } else {
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        // Real API rejection — show the error, don't fall through to demo
         const body = await res.json().catch(() => ({}));
-        apiError = body.error || 'HTTP ' + res.status;
+        apiError = body.error || 'Invalid credentials';
+      } else {
+        // Non-API response (e.g. 406 from GitHub Pages, 502 from proxy) — treat as server unavailable
+        apiError = null;
+        result = null;
       }
     } catch(e) {
       // Server unreachable — no error, just fall through to demo
