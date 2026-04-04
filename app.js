@@ -113,6 +113,19 @@ const PAGE_MAP = {
     if (e.key === 'Enter') doLogin();
   });
 
+  // Auto-fill password when switching demo accounts (convenience for testing)
+  const usernameInput = document.getElementById('loginUsername');
+  usernameInput.addEventListener('change', function() {
+    const errDiv = document.getElementById('loginError');
+    errDiv.style.display = 'none';
+    const demo = DEMO_ACCOUNTS[this.value.trim().toLowerCase()];
+    if (demo) {
+      passInput.value = demo.password;
+    } else {
+      passInput.value = '';
+    }
+  });
+
   // Demo credentials for offline/GitHub Pages fallback (no backend)
   const DEMO_ACCOUNTS = {
     admin:    { password: 'admin123456', role: 'admin', name: 'System Admin', email: 'admin@westay.my' },
@@ -124,7 +137,7 @@ const PAGE_MAP = {
   };
 
   async function doLogin() {
-    const username = document.getElementById('loginUsername').value.trim();
+    const username = document.getElementById('loginUsername').value.trim().toLowerCase();
     const password = document.getElementById('loginPass').value;
     const remember = document.getElementById('rememberMe').checked;
     const errDiv = document.getElementById('loginError');
@@ -138,11 +151,27 @@ const PAGE_MAP = {
     loginBtn.disabled = true;
     loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
 
-    // Try backend API first
-    const result = await apiFetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password })
-    });
+    // Try backend API first — capture error details
+    let apiError = null;
+    let result = null;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch((typeof API_BASE !== 'undefined' ? API_BASE : '/api') + '/auth/login', {
+        method: 'POST', headers, body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        result = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        apiError = body.error || 'HTTP ' + res.status;
+      }
+    } catch(e) {
+      // Server unreachable — no error, just fall through to demo
+      apiError = null;
+      result = null;
+    }
 
     loginBtn.disabled = false;
     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt" style="margin-right:6px"></i>Sign In';
@@ -155,25 +184,104 @@ const PAGE_MAP = {
       return;
     }
 
-    // Backend unavailable or login failed — try demo mode fallback
-    if (!result || !result.token) {
-      const demo = DEMO_ACCOUNTS[username];
-      if (demo && demo.password === password) {
-        const demoUser = { id: 'demo-' + username, username: username, role: demo.role, name: demo.name, email: demo.email };
-        const demoToken = 'demo_' + btoa(JSON.stringify(demoUser));
-        errDiv.style.display = 'none';
-        _useAPI = false; // Switch to localStorage-only mode
-        setAuthToken(demoToken, demoUser, remember);
-        loginAs(demo.role);
-        return;
-      }
+    // If API explicitly rejected (wrong password) — show error immediately, do NOT fallback to demo
+    if (apiError) {
+      errDiv.querySelector('span').textContent = apiError;
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    // Backend unavailable — try offline demo mode fallback
+    const demo = DEMO_ACCOUNTS[username];
+    if (demo && demo.password === password) {
+      const demoUser = { id: 'demo-' + username, username: username, role: demo.role, name: demo.name, email: demo.email };
+      const demoToken = 'demo_' + btoa(JSON.stringify(demoUser));
+      errDiv.style.display = 'none';
+      _useAPI = false; // Switch to localStorage-only mode
+      setAuthToken(demoToken, demoUser, remember);
+      loginAs(demo.role);
+      return;
     }
 
     // Both failed — show error
-    errDiv.querySelector('span').textContent = (result && result.error) || 'Login failed. Check credentials.';
+    errDiv.querySelector('span').textContent = 'Login failed. Check your username and password.';
     errDiv.style.display = 'block';
   }
 })();
+
+// ---- FORGOT PASSWORD ----
+function showForgotPassword() {
+  var html = '<div style="text-align:center;padding:20px">' +
+    '<div style="width:56px;height:56px;border-radius:50%;background:var(--p)22;color:var(--p);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 14px"><i class="fas fa-lock"></i></div>' +
+    '<h3 style="margin-bottom:4px">Reset Password</h3>' +
+    '<p style="font-size:12px;color:var(--t3);margin-bottom:18px">Enter your username and registered email to reset your password</p>' +
+    '<div id="fpError" style="display:none;color:#E17055;background:#fff5f5;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:12px;border:1px solid #fecdd2"><i class="fas fa-exclamation-circle"></i> <span></span></div>' +
+    '<div id="fpSuccess" style="display:none;color:#00B894;background:#f0fff4;padding:12px;border-radius:8px;margin-bottom:12px;font-size:12px;border:1px solid #c6f6d5"></div>' +
+    '<div style="text-align:left;margin-bottom:12px">' +
+    '<label style="font-size:12px;font-weight:600;color:var(--t2)">Username</label>' +
+    '<input type="text" id="fpUsername" placeholder="e.g. sarah" style="width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;margin-top:4px;font-size:13px;box-sizing:border-box">' +
+    '</div>' +
+    '<div style="text-align:left;margin-bottom:18px">' +
+    '<label style="font-size:12px;font-weight:600;color:var(--t2)">Registered Email</label>' +
+    '<input type="email" id="fpEmail" placeholder="e.g. sarah@westay.my" style="width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;margin-top:4px;font-size:13px;box-sizing:border-box">' +
+    '</div>' +
+    '<button onclick="resetPassword()" id="fpBtn" style="width:100%;padding:12px;background:var(--p);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer"><i class="fas fa-paper-plane" style="margin-right:6px"></i>Reset Password</button>' +
+    '<div style="margin-top:14px;font-size:11px;color:var(--t3)"><strong>Demo accounts:</strong> sarah@westay.my, operator@westay.my, admin@westay.my</div>' +
+    '</div>';
+  openModal('Forgot Password', html, '420px');
+}
+
+async function resetPassword() {
+  var username = document.getElementById('fpUsername').value.trim();
+  var email = document.getElementById('fpEmail').value.trim();
+  var errDiv = document.getElementById('fpError');
+  var successDiv = document.getElementById('fpSuccess');
+  var btn = document.getElementById('fpBtn');
+
+  errDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+
+  if (!username || !email) {
+    errDiv.querySelector('span').textContent = 'Please enter both username and email';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
+
+  try {
+    var res = await fetch((typeof API_BASE !== 'undefined' ? API_BASE : '/api') + '/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, email: email })
+    });
+    var data = await res.json();
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:6px"></i>Reset Password';
+
+    if (res.ok && data.success) {
+      successDiv.innerHTML = '<i class="fas fa-check-circle"></i> <strong>Password Reset Successful!</strong><br><br>' +
+        'Your new temporary password is:<br>' +
+        '<code style="display:inline-block;background:#1a1a2e;color:#00B894;padding:8px 16px;border-radius:6px;font-size:16px;font-weight:bold;margin:8px 0;letter-spacing:1px">' + escHtml(data.temp_password) + '</code><br><br>' +
+        '<span style="color:var(--t3)">Please log in and change your password from Settings.</span>';
+      successDiv.style.display = 'block';
+
+      // Pre-fill login form
+      document.getElementById('loginUsername').value = username;
+      document.getElementById('loginPass').value = data.temp_password;
+    } else {
+      errDiv.querySelector('span').textContent = data.error || 'Reset failed';
+      errDiv.style.display = 'block';
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:6px"></i>Reset Password';
+    errDiv.querySelector('span').textContent = 'Server unavailable. Password reset requires the backend server.';
+    errDiv.style.display = 'block';
+  }
+}
 
 function loginAs(role) {
   currentRole = role;
