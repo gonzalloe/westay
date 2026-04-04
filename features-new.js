@@ -546,7 +546,44 @@ async function processGatewayPayment(billType, billId) {
   if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
   var methodNames = { fpx: 'FPX Online Banking', card: 'Credit/Debit Card', ewallet: 'GrabPay' };
 
-  setTimeout(function() {
+  setTimeout(async function() {
+    // Use proper API endpoints if server is available (persists to DB)
+    if (_useAPI) {
+      try {
+        var endpoint = billType === 'rent' ? '/bills/' + billId + '/pay' : '/utility-bills/' + billId + '/pay';
+        var result = await apiFetch(endpoint, { method: 'PATCH' });
+        if (result) {
+          // Update in-memory data from API response
+          if (billType === 'rent') {
+            var bill = BILLS.find(function(b) { return b.id === billId; });
+            if (bill) bill.s = 'Paid';
+            // Auto-reconnect handled server-side; sync local state
+            if (result.reconnected) {
+              var meter = ELECTRIC_METERS.find(function(m) { return m.meterId === result.reconnected.meterId; });
+              if (meter) meter.status = 'Connected';
+              toast('Electric auto-reconnected for Room ' + result.reconnected.room, 'success');
+            }
+            if (result.lockReEnabled) {
+              var lock = SMART_LOCK_REGISTRY.find(function(l) { return l.tenant === result.lockReEnabled.tenant; });
+              if (lock) { lock.status = 'Active'; lock.fingerprints = 2; }
+            }
+          } else {
+            var ubill = UTILITY_BILLS.find(function(b) { return b.id === billId; });
+            if (ubill) ubill.status = 'Paid';
+          }
+          closeModal();
+          showPaymentReceipt(billType, billId, payMethod, methodNames);
+          toast('Payment successful!', 'success');
+          pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[payMethod] || 'Online'));
+          _selectedPaymentMethod = '';
+          return;
+        }
+      } catch(e) {
+        console.warn('[Payment] API pay failed, falling back to local:', e.message);
+      }
+    }
+
+    // Offline / GitHub Pages fallback — update locally only
     if (billType === 'rent') {
       var bill = BILLS.find(function(b) { return b.id === billId; });
       if (bill) {
@@ -654,17 +691,38 @@ function processBulkPayment() {
 
   var tenant = ROLE_CONFIG[currentRole] ? ROLE_CONFIG[currentRole].user.name : 'Sarah Lim';
 
-  setTimeout(function() {
+  setTimeout(async function() {
     var count = 0;
-    BILLS.forEach(function(b) { if (b.t === tenant && b.s !== 'Paid') { b.s = 'Paid'; count++; } });
-    if (typeof UTILITY_BILLS !== 'undefined') {
-      UTILITY_BILLS.forEach(function(b) { if (b.tenant === tenant && b.status !== 'Paid') { b.status = 'Paid'; count++; } });
+    var unpaidRent = BILLS.filter(function(b) { return b.t === tenant && b.s !== 'Paid'; });
+    var unpaidUtil = typeof UTILITY_BILLS !== 'undefined' ? UTILITY_BILLS.filter(function(b) { return b.tenant === tenant && b.status !== 'Paid'; }) : [];
+
+    if (_useAPI) {
+      // Pay each bill via proper API endpoints
+      for (var i = 0; i < unpaidRent.length; i++) {
+        try {
+          await apiFetch('/bills/' + unpaidRent[i].id + '/pay', { method: 'PATCH' });
+          unpaidRent[i].s = 'Paid';
+          count++;
+        } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidRent[i].id, e); }
+      }
+      for (var j = 0; j < unpaidUtil.length; j++) {
+        try {
+          await apiFetch('/utility-bills/' + unpaidUtil[j].id + '/pay', { method: 'PATCH' });
+          unpaidUtil[j].status = 'Paid';
+          count++;
+        } catch(e) { console.warn('[BulkPay] Failed to pay ' + unpaidUtil[j].id, e); }
+      }
+    } else {
+      // Offline fallback
+      unpaidRent.forEach(function(b) { b.s = 'Paid'; count++; });
+      unpaidUtil.forEach(function(b) { b.status = 'Paid'; count++; });
+      saveData();
     }
-    saveData();
+
     closeModal();
     toast(count + ' bill(s) paid successfully!', 'success');
     pushNotif('fa-credit-card', '#00B894', 'Bulk Payment', count + ' bills paid');
-    navigateTo('my-bills');
+    navigateTo(currentPage);
   }, 1500);
 }
 
