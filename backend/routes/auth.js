@@ -121,6 +121,37 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
+  // POST /api/auth/forgot-password — Reset password by username + email verification
+  router.post('/forgot-password', validate({
+    username: { required: true, type: 'string', maxLen: 50 },
+    email: { required: true, type: 'string', maxLen: 200 }
+  }), async (req, res) => {
+    try {
+      const { username, email } = req.body;
+
+      const user = await db.getUserByUsername(username.toLowerCase().trim());
+      if (!user || !user.email || user.email.toLowerCase() !== email.toLowerCase().trim()) {
+        return res.status(404).json({ error: 'No account found with that username and email combination' });
+      }
+
+      // Generate temporary password (8 chars)
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      let tempPass = '';
+      for (let i = 0; i < 8; i++) tempPass += chars.charAt(Math.floor(Math.random() * chars.length));
+
+      const hashedPassword = await bcrypt.hash(tempPass, 10);
+      await db.updateUser(user.id, { password: hashedPassword });
+
+      // In production, this would be emailed. For now, return it in response.
+      res.json({
+        success: true,
+        message: 'Password has been reset',
+        temp_password: tempPass,
+        note: 'Please change your password after logging in'
+      });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
   // GET /api/auth/users — List all users (admin only)
   router.get('/users', authenticate, requireRole('admin'), async (req, res) => {
     try {

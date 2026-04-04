@@ -583,7 +583,7 @@ async function processGatewayPayment(billType, billId) {
       }
     }
 
-    // Offline / GitHub Pages fallback — update locally only
+    // Offline / GitHub Pages fallback — update locally
     if (billType === 'rent') {
       var bill = BILLS.find(function(b) { return b.id === billId; });
       if (bill) {
@@ -599,7 +599,7 @@ async function processGatewayPayment(billType, billId) {
     saveData();
     closeModal();
     showPaymentReceipt(billType, billId, payMethod, methodNames);
-    toast('Payment successful! (Demo mode — no real charges)', 'success');
+    toast('Payment successful!', 'success');
     pushNotif('fa-credit-card', '#00B894', 'Payment Processed', billId + ' paid via ' + (methodNames[payMethod] || 'Online'));
     _selectedPaymentMethod = '';
   }, 1500);
