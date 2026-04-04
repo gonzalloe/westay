@@ -93,7 +93,7 @@ function tenantBillsHtml() {
       '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">' + escHtml(b.id) + ' <span style="font-size:9px;color:var(--t3);font-weight:400">' + escHtml(b.type) + '</span></div><div style="font-size:10px;color:var(--t3)">' + escHtml(b.date) + '</div></div>' +
       '<div style="font-size:13px;font-weight:700;white-space:nowrap">' + escHtml(b.amount) + '</div>' +
       (isPaid ? '<span class="bs ' + cls + '" style="flex-shrink:0">' + escHtml(b.status) + '</span>' :
-        '<button class="btn btn-p" style="padding:4px 10px;font-size:10px;flex-shrink:0" onclick="event.stopPropagation();tenantPayWithGateway(\'' + b.billType + '\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>') +
+        '<button class="btn btn-p" style="padding:4px 10px;font-size:10px;flex-shrink:0" onclick="event.stopPropagation();payWithGateway(\'' + b.billType + '\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>') +
       '</div>';
   });
 

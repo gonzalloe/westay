@@ -389,16 +389,7 @@ function showUtilityBillDetail(billId) {
 }
 
 function payUtilityBill(billId) {
-  const bill = UTILITY_BILLS.find(b => b.id === billId);
-  if (!bill) return;
-  confirmDialog('Pay Utility Bill', 'Process payment of RM ' + bill.total.toFixed(2) + ' for ' + escHtml(bill.tenant) + '?', function() {
-    bill.status = 'Paid';
-    saveData();
-    toast('Utility bill ' + escHtml(bill.id) + ' paid!', 'success');
-    pushNotif('fa-credit-card', '#00B894', 'Utility Bill Paid', escHtml(bill.tenant) + ' — RM ' + bill.total.toFixed(2));
-    closeModal();
-    setTimeout(showUtilityBillList, 200);
-  }, 'success');
+  payWithGateway('utility', billId);
 }
 
 function exportUtilityBillsCSV() {
@@ -423,7 +414,7 @@ function printUtilityBill() {
 // PAYMENT GATEWAY — Real Stripe Checkout + Simulation Fallback
 // ============================================================
 
-function tenantPayWithGateway(billType, billId) {
+function payWithGateway(billType, billId) {
   var bill, amount, label;
   if (billType === 'rent') {
     bill = BILLS.find(function(b) { return b.id === billId; });
@@ -595,7 +586,7 @@ function showPaymentReceipt(billType, billId, payMethod, methodNames) {
 
   setTimeout(function() {
     openModal('<i class="fas fa-receipt" style="color:#00B894"></i> Payment Receipt', receiptHtml,
-      '<button class="btn btn-ghost" onclick="closeModal();navigateTo(\'my-bills\')">Done</button>' +
+      '<button class="btn btn-ghost" onclick="closeModal();navigateTo(currentPage)">Done</button>' +
       '<button class="btn" style="background:#00B894;color:#fff" onclick="printReportPreview()"><i class="fas fa-print"></i> Print Receipt</button>', 'sm');
   }, 200);
 }

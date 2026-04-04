@@ -180,10 +180,7 @@ function doSubmitVI() {
 
 // ---- STATUS TRANSITIONS ----
 function payBill(id) {
-  confirmDialog('Confirm Payment', 'Process payment for ' + escHtml(id) + '?', () => {
-    const b = BILLS.find(x=>x.id===id); if (!b) return; b.s = 'Paid'; saveData();
-    toast(escHtml(id) + ' paid!', 'success'); pushNotif('fa-credit-card', '#00B894', 'Payment Processed', escHtml(id) + ' — ' + escHtml(b.a)); navigateTo(currentPage);
-  }, 'success');
+  payWithGateway('rent', id);
 }
 function updateTicketStatus(id, s) {
   const tk = TICKETS.find(x=>x.id===id); if (!tk) return; tk.s = s; tk.time = 'Just now'; saveData();

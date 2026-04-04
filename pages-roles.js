@@ -102,7 +102,7 @@ function tenantMyBills() {
       '<td><i class="fas fa-home" style="color:#6C5CE7;margin-right:6px;font-size:10px"></i><span style="font-weight:600">' + escHtml(b.id) + '</span></td>' +
       '<td>Rent</td><td style="font-weight:600">' + escHtml(b.a) + '</td>' +
       '<td><span class="bs ' + cls + '">' + escHtml(b.s) + '</span></td><td>' + escHtml(b.d) + '</td>' +
-      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();tenantPayWithGateway(\'rent\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
+      '<td>' + (b.s !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payWithGateway(\'rent\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
   });
 
   // Utility bills rows
@@ -113,7 +113,7 @@ function tenantMyBills() {
       '<td><i class="fas fa-bolt" style="color:#FDCB6E;margin-right:6px;font-size:10px"></i><span style="font-weight:600">' + escHtml(b.id) + '</span></td>' +
       '<td>Utility</td><td style="font-weight:600;color:var(--p)">RM ' + b.total.toFixed(2) + '</td>' +
       '<td><span class="bs ' + cls + '">' + escHtml(b.status) + '</span></td><td>' + escHtml(b.period) + '</td>' +
-      '<td>' + (b.status !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();tenantPayWithGateway(\'utility\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
+      '<td>' + (b.status !== 'Paid' ? '<button class="btn btn-p" style="padding:5px 12px;font-size:11px" onclick="event.stopPropagation();payWithGateway(\'utility\',\'' + b.id + '\')"><i class="fas fa-credit-card"></i> Pay</button>' : '<i class="fas fa-check-circle" style="color:var(--ok)"></i>') + '</td></tr>';
   });
 
   // Combined table
