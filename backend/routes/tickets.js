@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { validate, stripFields } = require('../middleware/validate');
 const paginate = require('../middleware/paginate');
+const { uploadImages, setEntityType, deleteUploadedFile, handleUploadError } = require('../middleware/upload');
 
 module.exports = function(db) {
 
@@ -95,7 +96,31 @@ module.exports = function(db) {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
-  // POST /api/tickets/:id/photos — Add photos
+  // POST /api/tickets/:id/photos/upload — Upload actual image files
+  router.post('/:id/photos/upload', setEntityType('tickets'), uploadImages.array('photos', 5), handleUploadError, async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+
+      const existing = (await db.getStore('ticket_photos', req.params.id)) || [];
+      const newPhotos = req.files.map(f => ({
+        filename: f.filename,
+        originalName: f.originalname,
+        path: 'tickets/' + f.filename,
+        size: f.size,
+        mimetype: f.mimetype,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: req.user ? req.user.username : 'unknown'
+      }));
+
+      const updated = [...existing, ...newPhotos];
+      await db.setStore('ticket_photos', req.params.id, updated);
+      res.status(201).json(updated);
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // POST /api/tickets/:id/photos — Add photos by filename (legacy/fallback)
   router.post('/:id/photos', validate({
     filenames: { required: true, isArray: true }
   }), async (req, res) => {
@@ -114,6 +139,13 @@ module.exports = function(db) {
       const photos = (await db.getStore('ticket_photos', req.params.id)) || [];
       const idx = parseInt(req.params.index);
       if (idx < 0 || idx >= photos.length) return res.status(404).json({ error: 'Photo not found' });
+
+      // Delete actual file if it's an object with path
+      const photo = photos[idx];
+      if (photo && photo.path) {
+        deleteUploadedFile(photo.path);
+      }
+
       photos.splice(idx, 1);
       await db.setStore('ticket_photos', req.params.id, photos);
       res.json(photos);

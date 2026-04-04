@@ -13,11 +13,12 @@
 - [Tech Stack](#tech-stack)
 - [Architecture Overview](#architecture-overview)
 - [Backend Structure](#backend-structure)
-- [API Endpoints (~105+ total)](#api-endpoints)
+- [API Endpoints (~125+ total)](#api-endpoints)
 - [Authentication & Roles](#authentication--roles)
 - [Database Layer](#database-layer)
 - [Changing the Database Adapter](#changing-the-database-adapter)
 - [IoT & Automations](#iot--automations)
+- [Testing](#testing)
 - [Merging `backend-dev` into `demo`](#merging-backend-dev-into-demo)
 - [What's Done](#whats-done)
 - [What's NOT Done Yet](#whats-not-done-yet)
@@ -36,12 +37,34 @@ git checkout backend-dev
 # Install dependencies
 npm install
 
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your settings (JWT_SECRET, Stripe keys, SMTP, etc.)
+
 # Start the server
 npm start
 # => http://localhost:3456
 ```
 
 The server serves both the API (`/api/*`) and the frontend (static files from project root). The SQLite database auto-initializes with demo data on first run.
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | No | Server port (default: 3456) |
+| `JWT_SECRET` | **Yes** | Secret key for JWT signing |
+| `DB_PATH` | No | SQLite file path (default: `backend/data/westay.db`) |
+| `CORS_ORIGIN` | No | Allowed CORS origins (default: `*`) |
+| `STRIPE_SECRET_KEY` | No | Stripe API key for payments |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | No | Email (Nodemailer) config |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | No | WhatsApp Cloud API config |
+| `SSL_KEY_PATH`, `SSL_CERT_PATH` | No | HTTPS certificate paths |
+
+See `.env.example` for the full list.
 
 ---
 
@@ -54,12 +77,19 @@ The server serves both the API (`/api/*`) and the frontend (static files from pr
 | **Database** | SQLite via [sql.js](https://github.com/nicolewhite/sql.js) (pure JS, no native deps) |
 | **Auth** | JWT ([jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken)) + bcrypt ([bcryptjs](https://www.npmjs.com/package/bcryptjs)) |
 | **Security** | helmet (HTTP headers) + express-rate-limit + CORS + input sanitization |
+| **Payments** | Stripe (FPX + card + GrabPay) |
+| **Notifications** | Nodemailer (email) + WhatsApp Cloud API + in-app |
+| **File Upload** | multer (local storage, MIME filtering) |
+| **HTTPS** | SSL/TLS with auto-redirect + self-signed cert generation |
+| **Logging** | Custom structured logging (file rotation: app.log, error.log, http.log) |
+| **Testing** | Jest 30 (100 tests across 4 suites) |
 | **i18n** | Built-in (English, Malay, Chinese) |
 | **Real-Time** | WebSocket (native, no socket.io) |
 
-### Dependencies (package.json)
+### Dependencies
 
 ```
+# Production
 express            ^5.2.1   — Web framework
 sql.js             ^1.14.1  — Pure-JS SQLite (WASM)
 jsonwebtoken       ^9.0.3   — JWT signing/verification
@@ -68,9 +98,13 @@ cors               ^2.8.6   — Cross-origin resource sharing
 helmet             ^8.1.0   — HTTP security headers
 dotenv             ^17.4.0  — Environment variable management
 express-rate-limit ^8.3.2   — API rate limiting
-```
+multer             ^2.1.1   — File upload handling
+nodemailer         ^8.0.4   — Email sending (SMTP)
+stripe             ^22.0.0  — Payment processing (FPX, card, GrabPay)
 
-Zero dev dependencies. No bundler, no test framework (yet).
+# Dev
+jest               ^30.3.0  — Test framework
+```
 
 ---
 
@@ -78,11 +112,12 @@ Zero dev dependencies. No bundler, no test framework (yet).
 
 ```
 project-root/
-├── server.js                   # Express entry point (port 3456) + WebSocket
-├── .env.example                # Environment variable template
+├── server.js                   # Express entry point (port 3456) + WebSocket + HTTPS
+├── .env.example                # Environment variable template (57 vars)
+├── package.json                # Dependencies & scripts
 ├── backend/
 │   ├── db/
-│   │   ├── interface.js        # Abstract DB contract (13 methods)
+│   │   ├── interface.js        # Abstract DB contract (13+ methods)
 │   │   ├── sqlite-adapter.js   # SQLite implementation (persistent)
 │   │   ├── memory-adapter.js   # In-memory implementation (dev/test)
 │   │   ├── index.js            # Adapter factory (swap DB here)
@@ -93,7 +128,13 @@ project-root/
 │   │   ├── validate.js         # Input validation + XSS sanitization
 │   │   ├── error-handler.js    # Centralized error handler
 │   │   ├── paginate.js         # Pagination helper (?page=1&limit=50)
-│   │   └── audit.js            # Audit log middleware (change tracking)
+│   │   ├── audit.js            # Audit log middleware (change tracking)
+│   │   ├── logger.js           # Structured logging (file rotation)
+│   │   └── upload.js           # File upload (multer, MIME filtering)
+│   ├── services/
+│   │   ├── notification.js     # Email + WhatsApp + in-app notification engine
+│   │   └── payment.js          # Stripe integration (FPX, card, GrabPay)
+│   ├── https.js                # Optional HTTPS with self-signed cert generation
 │   ├── i18n/
 │   │   ├── index.js            # Translation engine + middleware
 │   │   └── locales/
@@ -101,7 +142,7 @@ project-root/
 │   │       ├── ms.js           # Malay (Bahasa Melayu) translations
 │   │       └── zh.js           # Chinese (中文) translations
 │   ├── websocket.js            # WebSocket real-time engine
-│   └── routes/
+│   └── routes/                 # 19 route files
 │       ├── auth.js             # Login, register, profile, user mgmt
 │       ├── props.js            # Properties CRUD
 │       ├── tenants.js          # Tenants CRUD
@@ -117,16 +158,24 @@ project-root/
 │       ├── misc.js             # Check-in/out, notifs, automations, config, bulk ops
 │       ├── reports.js          # Report export (JSON + CSV)
 │       ├── audit.js            # Audit log API (query, stats, CSV export)
-│       ├── docs.js             # Auto-generated API documentation (OpenAPI 3.0)
-│       └── i18n.js             # i18n API (locales, translations)
+│       ├── docs.js             # Auto-generated API docs (OpenAPI 3.0)
+│       ├── i18n.js             # i18n API (locales, translations)
+│       ├── notifications.js    # Multi-channel notifications (email, WhatsApp, in-app)
+│       └── payments.js         # Stripe payment gateway
+├── tests/
+│   ├── setup.js                # Test environment setup
+│   ├── db.test.js              # Database adapter tests
+│   ├── api.test.js             # API endpoint tests
+│   ├── middleware.test.js      # Middleware tests
+│   └── services.test.js        # Service layer tests
 ├── index.html                  # Frontend SPA entry
-├── app.js, crud.js, ...        # Frontend JS modules
+├── app.js, crud.js, ...        # Frontend JS modules (10 files)
 └── styles.css                  # Frontend styles
 ```
 
 ### Key Design Pattern: Repository/Adapter
 
-The backend uses an **abstract `DatabaseInterface`** class with 13 methods. Any adapter that implements these methods can be swapped in with a single line change. Currently two adapters exist:
+The backend uses an **abstract `DatabaseInterface`** class with 13+ methods. Any adapter that implements these methods can be swapped in with a single line change. Currently two adapters exist:
 
 - **`SqliteAdapter`** — Persistent, writes to `backend/data/westay.db`
 - **`MemoryAdapter`** — In-memory arrays/objects, data lost on restart
@@ -137,7 +186,7 @@ This makes it trivial to add MySQL, PostgreSQL, MongoDB, or any other adapter in
 
 ## Backend Structure
 
-### Database Interface (13 methods)
+### Database Interface (13+ methods)
 
 | Method | Description |
 |---|---|
@@ -154,6 +203,8 @@ This makes it trivial to add MySQL, PostgreSQL, MongoDB, or any other adapter in
 | `setStore(store, key, value)` | Set value in key-value store |
 | `getAllStore(store)` | Get entire key-value store |
 | `deleteStore(store, key)` | Delete key from store |
+
+**User auth methods** (on SQLite adapter): `getUserByUsername`, `getUserById`, `createUser`, `updateUser`, `deleteUser`, `getAllUsers`, `hasUsers`, `isSeeded`, `resetDB`
 
 Two data paradigms:
 - **Collections** (array-based): props, tenants, tickets, bills, vendors, work_orders, leads, landlords, contracts, utility_bills, checkinout_records, smart_lock_registry, electric_meters, water_meters, iot_locks, notifs
@@ -183,6 +234,8 @@ Two data paradigms:
 ---
 
 ## API Endpoints
+
+**~125+ endpoints** across 19 route files. All authenticated endpoints require `Authorization: Bearer <JWT>`.
 
 ### Auth (`/api/auth`) — 6 endpoints
 
@@ -331,7 +384,7 @@ Two data paradigms:
 | GET | `/api/iot/locks/:id` | Authenticated | Get lock |
 | PATCH | `/api/iot/locks/:id/toggle` | Authenticated | Toggle lock/unlock |
 
-### Misc (`/api/misc`) — 16 endpoints
+### Misc (`/api/misc`) — 18 endpoints
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -357,6 +410,27 @@ Two data paradigms:
 | POST | `/api/misc/reset` | Operator only | Reset all data to demo |
 | GET | `/api/misc/all-data` | Authenticated | Bulk fetch (21 collections) |
 | POST | `/api/misc/save-data` | Operator only | Bulk save |
+
+### Payments (`/api/payments`) — 5 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/payments/create-intent` | Authenticated | Create Stripe PaymentIntent (FPX, card, or GrabPay) |
+| POST | `/api/payments/confirm` | Authenticated | Confirm payment + update bill status |
+| POST | `/api/payments/refund` | Operator only | Refund a payment |
+| GET | `/api/payments/status/:intentId` | Authenticated | Check payment status |
+| POST | `/api/payments/webhook` | Public (Stripe) | Stripe webhook handler (signature verified) |
+
+### Notifications (`/api/notifications`) — 6 endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/notifications/email` | Authenticated | Send email notification |
+| POST | `/api/notifications/whatsapp` | Authenticated | Send WhatsApp message |
+| POST | `/api/notifications/in-app` | Authenticated | Create in-app notification |
+| POST | `/api/notifications/rent-reminder/:tenantName` | Authenticated | Send rent reminder (email + WhatsApp + in-app) |
+| POST | `/api/notifications/bulk-reminders` | Operator only | Send reminders to all tenants with pending bills |
+| GET | `/api/notifications/channels` | Authenticated | List available notification channels |
 
 ### Reports (`/api/reports`) — 8 endpoints
 
@@ -427,13 +501,13 @@ Real-time event broadcasting. Connect via WebSocket, authenticate with JWT.
 
 ### 5 User Roles
 
-| Role | Access Level |
-|---|---|
-| `operator` | Full access to everything (admin) |
-| `tenant` | View own data, submit tickets, view bills |
-| `landlord` | View own properties, reports, bills |
-| `vendor` | View assigned work orders, update status |
-| `agent` | Manage leads/prospects |
+| Role | Pages | Access Level |
+|---|---|---|
+| `operator` | 14 | Full access to everything (admin) |
+| `tenant` | 10 | View own data, submit tickets, view bills |
+| `landlord` | 7 | View own properties, reports, bills |
+| `vendor` | 7 | View assigned work orders, update status |
+| `agent` | 8 | Manage leads/prospects |
 
 ---
 
@@ -467,7 +541,7 @@ db = new MemoryAdapter();
 #### Option B: Create a New Adapter (MySQL, PostgreSQL, MongoDB, etc.)
 
 1. **Create a new adapter file** (e.g., `backend/db/mysql-adapter.js`)
-2. **Extend `DatabaseInterface`** and implement all 13 methods:
+2. **Extend `DatabaseInterface`** and implement all methods:
 
 ```js
 const DatabaseInterface = require('./interface');
@@ -497,6 +571,7 @@ class MySQLAdapter extends DatabaseInterface {
   async getAllUsers() { /* ... */ }
   async hasUsers() { /* ... */ }
   async isSeeded() { /* ... */ }
+  async resetDB() { /* ... */ }
 }
 ```
 
@@ -561,6 +636,30 @@ When `PATCH /api/bills/:id/pay` is called:
 
 ---
 
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# With coverage
+npm run test:coverage
+```
+
+**100 tests** across 4 suites:
+
+| Suite | Tests | Coverage |
+|---|---|---|
+| `db.test.js` | Database adapter operations (CRUD, stores, queries, users) | SQLite + seed |
+| `api.test.js` | API endpoint integration tests (auth, CRUD, pagination) | Routes + middleware |
+| `middleware.test.js` | Middleware unit tests (auth, validate, paginate, audit, error) | All middleware |
+| `services.test.js` | Service layer tests (notification, payment) | Services |
+
+---
+
 ## Merging `backend-dev` into `demo`
 
 ### When to Merge
@@ -596,6 +695,8 @@ git push origin demo
 - [ ] Update GitHub Pages settings if switching to a hosted backend
 - [ ] Set environment variables on your hosting platform:
   - `JWT_SECRET` — change from dev default to a secure random string
+  - `STRIPE_SECRET_KEY` — production Stripe key
+  - `SMTP_*` — production email config
   - `PORT` — if your host requires a specific port
 
 ### If You Want to Keep Both Deployment Modes
@@ -606,88 +707,78 @@ Keep `demo` for GitHub Pages (frontend-only with localStorage fallback) and `bac
 
 ## What's Done
 
-| Feature | Status | Details |
+| Feature | Version | Details |
 |---|---|---|
-| REST API | ✅ | 17 route files, ~105+ endpoints |
-| SQLite Database | ✅ | Persistent, auto-seed, repository pattern |
-| In-Memory DB | ✅ | Available as alternative adapter |
-| JWT Authentication | ✅ | Login, register, token refresh via 7-day expiry |
-| Role-Based Access | ✅ | 5 roles, per-route middleware enforcement |
-| Password Security | ✅ | async bcrypt hashed, min 6 chars, change password endpoint |
-| Security Hardening | ✅ | helmet + dotenv + express-rate-limit + CORS + input sanitization |
-| Input Validation | ✅ | Custom `validate()` middleware on all POST/PUT/PATCH routes |
-| API Pagination | ✅ | All list endpoints: `?page=1&limit=50` (backward-compatible) |
-| Centralized Error Handler | ✅ | `errorHandler` middleware catches all unhandled errors |
-| Property Management | ✅ | Full CRUD |
-| Tenant Management | ✅ | Full CRUD + status tracking |
-| Billing & Invoicing | ✅ | Full CRUD + auto-generate + pay |
-| Maintenance Tickets | ✅ | Full CRUD + photos + status transitions |
-| Work Orders | ✅ | Full CRUD + vendor job tracking |
-| Vendor Management | ✅ | Full CRUD |
-| Lead Pipeline | ✅ | Full CRUD + status tracking |
-| Landlord Reports | ✅ | Owner report with revenue, meters, expenses, net income |
-| Contracts | ✅ | Full CRUD + e-sign |
-| Utility Bills | ✅ | Auto-generate from meter readings + rate config |
-| IoT Electric Meters | ✅ | Monitor, cut, reconnect, unit-wide ops |
-| IoT Water Meters | ✅ | Monitor readings |
-| Smart Lock Registry | ✅ | Fingerprint enable/disable |
-| Physical IoT Locks | ✅ | Status, toggle, battery monitoring |
-| Auto-Cut on Overdue | ✅ | Electric disconnect automation |
-| Auto-Disable Expired Locks | ✅ | Lease expiry automation |
-| Auto-Reconnect on Payment | ✅ | Meter + lock re-enable |
-| Check-In/Out Inspections | ✅ | Full CRUD + completion |
-| Notifications | ✅ | Create, read, mark-read |
-| Bulk Data Ops | ✅ | Fetch all / save all / reset to demo |
-| Demo Data Seeding | ✅ | 16+ entities auto-seeded |
-| Frontend API Integration | ✅ | Real login, Bearer token, API-first with localStorage fallback |
-| **Multi-Language (i18n)** | ✅ | English, Malay, Chinese — API + middleware + frontend-ready |
-| **Report Export** | ✅ | CSV export: owner reports, portfolio, tenants, bills, tickets, work orders |
-| **Audit Log** | ✅ | Full change tracking: create/update/delete/login + query/stats/CSV export |
-| **API Documentation** | ✅ | OpenAPI 3.0 spec + interactive HTML viewer at `/api/docs/ui` |
-| **WebSocket Real-Time** | ✅ | Native WS at `/ws` — notifications, IoT, tickets, bills, audit channels |
+| REST API | v1.0 | 19 route files, ~125+ endpoints |
+| SQLite Database | v1.0 | Persistent, auto-seed, repository pattern |
+| In-Memory DB | v1.0 | Available as alternative adapter |
+| JWT Authentication | v1.0 | Login, register, token refresh via 7-day expiry |
+| Role-Based Access | v1.0 | 5 roles (46 total page routes), per-route middleware enforcement |
+| Password Security | v1.0 | async bcrypt hashed, min 6 chars, change password endpoint |
+| Property Management | v1.0 | Full CRUD |
+| Tenant Management | v1.0 | Full CRUD + status tracking |
+| Billing & Invoicing | v1.0 | Full CRUD + auto-generate + pay |
+| Maintenance Tickets | v1.0 | Full CRUD + photos + status transitions |
+| Work Orders | v1.0 | Full CRUD + vendor job tracking |
+| Vendor Management | v1.0 | Full CRUD |
+| Lead Pipeline | v1.0 | Full CRUD + status tracking |
+| Landlord Reports | v1.0 | Owner report with revenue, meters, expenses, net income |
+| Contracts | v1.0 | Full CRUD + e-sign |
+| Utility Bills | v1.0 | Auto-generate from meter readings + rate config |
+| IoT Electric Meters | v1.0 | Monitor, cut, reconnect, unit-wide ops |
+| IoT Water Meters | v1.0 | Monitor readings |
+| Smart Lock Registry | v1.0 | Fingerprint enable/disable |
+| Physical IoT Locks | v1.0 | Status, toggle, battery monitoring |
+| Auto-Cut on Overdue | v1.0 | Electric disconnect automation |
+| Auto-Disable Expired Locks | v1.0 | Lease expiry automation |
+| Auto-Reconnect on Payment | v1.0 | Meter + lock re-enable |
+| Check-In/Out Inspections | v1.0 | Full CRUD + completion |
+| In-App Notifications | v1.0 | Create, read, mark-read |
+| Bulk Data Ops | v1.0 | Fetch all / save all / reset to demo |
+| Demo Data Seeding | v1.0 | 16+ entities auto-seeded |
+| Frontend API Integration | v1.0 | Real login, Bearer token, API-first with localStorage fallback |
+| Security Hardening | v1.1 | helmet + dotenv + express-rate-limit + CORS + input sanitization |
+| Input Validation | v1.1 | Custom `validate()` middleware on all POST/PUT/PATCH routes |
+| API Pagination | v1.1 | All list endpoints: `?page=1&limit=50` (backward-compatible) |
+| Centralized Error Handler | v1.1 | `errorHandler` middleware catches all unhandled errors |
+| Multi-Language (i18n) | v1.2 | English, Malay, Chinese — API + middleware + frontend-ready |
+| Report Export | v1.2 | CSV export: owner reports, portfolio, tenants, bills, tickets, work orders |
+| Audit Log | v1.2 | Full change tracking: create/update/delete/login + query/stats/CSV export |
+| API Documentation | v1.2 | OpenAPI 3.0 spec + interactive HTML viewer at `/api/docs/ui` |
+| WebSocket Real-Time | v1.2 | Native WS at `/ws` — notifications, IoT, tickets, bills, audit channels |
+| **Payment Gateway** | **v1.3** | **Stripe integration: FPX, card, GrabPay — create intent, confirm, refund, webhooks** |
+| **HTTPS/SSL** | **v1.3** | **Optional SSL/TLS with auto-redirect + self-signed cert generation** |
+| **File Upload** | **v1.3** | **multer-based upload with MIME filtering, entity-type organization, deletion** |
+| **Email Notifications** | **v1.3** | **Nodemailer with HTML templates, rent reminders, bulk reminders** |
+| **WhatsApp Notifications** | **v1.3** | **WhatsApp Cloud API integration for tenant messaging** |
+| **Structured Logging** | **v1.3** | **Custom logger with file rotation (app.log, error.log, http.log)** |
+| **Test Suite** | **v1.3** | **100 tests across 4 suites (Jest 30) — DB, API, middleware, services** |
 
 ---
 
 ## What's NOT Done Yet
 
-### 🔴 Critical (Required for Production)
+### 🟢 Nice to Have (Non-Blocking)
 
 | Feature | Priority | Details |
 |---|---|---|
-| **Payment Gateway** | High | No real payment integration. `PATCH /bills/:id/pay` just flips status. Need **Billplz**, **Revenue Monster**, or **Stripe** with FPX support for Malaysian market. |
-| **HTTPS** | High | No SSL/TLS. Required for production. Use reverse proxy (Nginx) or hosting platform. |
-
-### 🟡 Important (Should Have Before Launch)
-
-| Feature | Priority | Details |
-|---|---|---|
-| **File Upload** | Medium | Ticket photos are filename strings only — no actual file upload/storage. Need multer + S3/local storage. |
-| **Email/SMS Notifications** | Medium | In-app only. No Nodemailer, Twilio, or similar integration. |
-| **Logging** | Medium | `console.log` only. Need Winston or Pino for structured logging. |
-| **Test Suite** | Medium | Zero tests. Need Jest or Mocha for unit + integration tests. |
-
-### 🟢 Nice to Have
-
-| Feature | Priority | Details |
-|---|---|---|
-| **Tenant Portal Self-Service** | Low | Tenants can't register themselves. Operator must create accounts. |
+| **Tenant Self-Registration** | Low | Tenants can't register themselves. Operator must create accounts. |
 | **Docker** | Low | No Dockerfile. Would simplify deployment. |
 | **CI/CD** | Low | No GitHub Actions. Would automate testing + deployment. |
+| **OpenAPI Spec Update** | Low | `/api/docs` doesn't include payment & notification endpoints yet. |
+| **Tenant Marketplace** | Low | Frontend page exists as "coming soon" placeholder. |
+| **Agent Contacts** | Low | Frontend page exists as "coming soon" placeholder. |
+| **Forgot Password** | Low | Login page has link but no handler implemented. |
 
-### ✅ Recently Completed (moved from "NOT Done")
+### ⚠️ Production Hardening Notes
 
-| Feature | Completed | Details |
-|---|---|---|
-| ~~Environment Variables~~ | ✅ v1.1 | dotenv + `.env.example`, JWT secret from env |
-| ~~Input Validation~~ | ✅ v1.1 | Custom `validate()` middleware on all POST/PUT/PATCH |
-| ~~Rate Limiting~~ | ✅ v1.1 | Global 300/15min + Login 5/15min (`express-rate-limit`) |
-| ~~API Pagination~~ | ✅ v1.1 | All list endpoints support `?page=1&limit=50` |
-| ~~Error Handling~~ | ✅ v1.1 | Centralized `errorHandler` middleware |
-| ~~Multi-Language~~ | ✅ v1.2 | English, Malay, Chinese (i18n engine + API) |
-| ~~Report Export~~ | ✅ v1.2 | CSV export for owner reports, portfolio, tenants, bills, tickets, work orders |
-| ~~Audit Log~~ | ✅ v1.2 | Full change tracking with query API, stats, CSV export |
-| ~~API Documentation~~ | ✅ v1.2 | Auto-generated OpenAPI 3.0 spec + interactive HTML viewer at `/api/docs/ui` |
-| ~~WebSocket Real-Time~~ | ✅ v1.2 | Native WebSocket at `ws://localhost:PORT/ws` for live notifications, IoT, tickets |
+These are configuration/deployment concerns, not missing code:
+
+- **CSP WebSocket**: `index.html` Content-Security-Policy `connect-src` needs `ws:` / `wss:` directive for WebSocket to work in strict browsers
+- **package.json `main`**: Points to `app.js` instead of `server.js` (no functional impact, cosmetic only)
+- **Environment secrets**: Must set real `JWT_SECRET`, `STRIPE_SECRET_KEY`, SMTP credentials before deploying
+- **Rate limiting**: Tune `RATE_LIMIT_*` values for production traffic patterns
+- **CORS**: Set `CORS_ORIGIN` to specific domain(s) instead of `*`
 
 ---
 

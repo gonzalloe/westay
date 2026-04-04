@@ -29,6 +29,7 @@ class MemoryAdapter extends DatabaseInterface {
       water_meters: 'meterId',
       iot_locks: 'id',
       notifs: 'id',
+      audit_log: 'id',
       automations_state: 'key'
     };
   }

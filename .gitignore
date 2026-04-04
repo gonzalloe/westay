@@ -10,6 +10,15 @@ node_modules/
 # Database files (generated at runtime)
 backend/data/*.db
 
+# Logs (generated at runtime)
+backend/logs/
+
+# File uploads (user content)
+backend/uploads/
+
+# SSL certificates
+certs/
+
 # OS files
 Thumbs.db
 .DS_Store

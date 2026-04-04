@@ -14,8 +14,11 @@ const { getDB } = require('./backend/db');
 const { authenticate, requireRole, optionalAuth } = require('./backend/middleware/auth');
 const { sanitizeRequest } = require('./backend/middleware/validate');
 const errorHandler = require('./backend/middleware/error-handler');
+const { logger, httpLogger } = require('./backend/middleware/logger');
 const { i18nMiddleware } = require('./backend/i18n');
 const { attachWebSocket, broadcast, getClientCount, getConnectedUsers } = require('./backend/websocket');
+const { isSSLEnabled, createHTTPSServer, createRedirectServer } = require('./backend/https');
+const payment = require('./backend/services/payment');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -35,8 +38,36 @@ app.use(cors({
   credentials: true
 }));
 
+// Stripe webhook needs raw body BEFORE json parser
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    if (!payment.isConfigured()) {
+      return res.status(503).json({ error: 'Payment gateway not configured' });
+    }
+    const sig = req.headers['stripe-signature'];
+    const event = payment.constructWebhookEvent(req.body, sig);
+
+    // Handle payment events
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      logger.info('Payment succeeded', { paymentIntentId: pi.id, amount: pi.amount, billId: pi.metadata.billId });
+    } else if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object;
+      logger.warn('Payment failed', { paymentIntentId: pi.id, billId: pi.metadata.billId });
+    }
+
+    res.json({ received: true });
+  } catch (e) {
+    logger.error('Webhook error', { error: e.message });
+    res.status(400).json({ error: 'Webhook error: ' + e.message });
+  }
+});
+
 // Body parser with size limit
 app.use(express.json({ limit: '5mb' }));
+
+// HTTP request logging
+app.use(httpLogger);
 
 // Sanitize all incoming request bodies / query / params
 app.use(sanitizeRequest);
@@ -168,6 +199,14 @@ app.use('/api', async (req, res, next) => {
   const reportsRouter = require('./backend/routes/reports')(db);
   app.use('/api/reports', authenticate, reportsRouter);
 
+  // --- Payments: all authenticated (Stripe + manual) ---
+  const paymentsRouter = require('./backend/routes/payments')(db);
+  app.use('/api/payments', authenticate, paymentsRouter);
+
+  // --- Notifications: operator can send bulk, authenticated can send individual ---
+  const notificationsRouter = require('./backend/routes/notifications')(db);
+  app.use('/api/notifications', authenticate, notificationsRouter);
+
   // --- Audit: operator only ---
   const auditRouter = require('./backend/routes/audit')(db);
   app.use('/api/audit', authenticate, requireRole('operator'), auditRouter);
@@ -179,6 +218,9 @@ app.use('/api', async (req, res, next) => {
       authenticatedUsers: getConnectedUsers()
     });
   });
+
+  // ---- Serve uploaded files (authenticated) ----
+  app.use('/uploads', authenticate, express.static(path.join(__dirname, 'backend', 'uploads')));
 
   // ---- Static Files (serves frontend from project root) ----
   app.use(express.static(path.join(__dirname), {
@@ -200,40 +242,66 @@ app.use('/api', async (req, res, next) => {
   // ---- Centralized Error Handler (MUST be last middleware) ----
   app.use(errorHandler);
 
-  // ---- Start Server + WebSocket ----
-  const server = app.listen(PORT, () => {
-    console.log('');
-    console.log('  ===================================');
-    console.log('  WeStay Backend Server');
-    console.log('  ===================================');
-    console.log('  Frontend  : http://localhost:' + PORT);
-    console.log('  API Base  : http://localhost:' + PORT + '/api');
-    console.log('  API Docs  : http://localhost:' + PORT + '/api/docs/ui');
-    console.log('  WebSocket : ws://localhost:' + PORT + '/ws');
-    console.log('  Database  : SQLite (backend/data/westay.db)');
-    console.log('  Auth      : JWT + bcrypt');
-    console.log('  Security  : helmet + rate-limit + CORS + input sanitization');
-    console.log('  i18n      : English, Malay, Chinese');
-    console.log('  ===================================');
-    console.log('');
-    console.log('  Default Accounts:');
-    console.log('    operator / op123456     (full access)');
-    console.log('    sarah    / tenant123    (tenant - Sarah Lim)');
-    console.log('    landlord / landlord123  (landlord - Dato Lee Wei)');
-    console.log('    vendor   / vendor123    (vendor - AirCool Services)');
-    console.log('    agent    / agent123     (agent)');
-    console.log('');
-    console.log('  New Features:');
-    console.log('    /api/docs/ui           Interactive API documentation');
-    console.log('    /api/reports/*         Report export (JSON + CSV)');
-    console.log('    /api/audit             Audit log (operator only)');
-    console.log('    /api/i18n/locales      Supported languages');
-    console.log('    ws://localhost:' + PORT + '/ws    Real-time events');
-    console.log('');
-  });
+  // ---- Start Server (HTTP or HTTPS) + WebSocket ----
+  let server;
+  const httpsServer = createHTTPSServer(app);
 
-  // Attach WebSocket handler to the HTTP server
+  if (httpsServer) {
+    // HTTPS mode
+    server = httpsServer;
+    server.listen(PORT, () => {
+      logger.info('WeStay server started (HTTPS)', { port: PORT });
+      printStartupBanner('https');
+    });
+
+    // HTTP -> HTTPS redirect on port 80 (if available)
+    const redirectPort = parseInt(process.env.HTTP_REDIRECT_PORT) || 80;
+    try {
+      const redirect = createRedirectServer(PORT);
+      redirect.listen(redirectPort, () => {
+        logger.info('HTTP redirect server', { from: redirectPort, to: PORT });
+      });
+    } catch (e) {
+      logger.debug('HTTP redirect server not started (port ' + redirectPort + ' unavailable)');
+    }
+  } else {
+    // HTTP mode (default)
+    server = app.listen(PORT, () => {
+      logger.info('WeStay server started (HTTP)', { port: PORT });
+      printStartupBanner('http');
+    });
+  }
+
+  // Attach WebSocket handler to the HTTP(S) server
   attachWebSocket(server);
 
   dbReady = true;
 })();
+
+function printStartupBanner(protocol) {
+  const base = protocol + '://localhost:' + PORT;
+  console.log('');
+  console.log('  ===================================');
+  console.log('  WeStay Backend Server');
+  console.log('  ===================================');
+  console.log('  Frontend  : ' + base);
+  console.log('  API Base  : ' + base + '/api');
+  console.log('  API Docs  : ' + base + '/api/docs/ui');
+  console.log('  WebSocket : ws://localhost:' + PORT + '/ws');
+  console.log('  Database  : SQLite (backend/data/westay.db)');
+  console.log('  Auth      : JWT + bcrypt');
+  console.log('  Security  : helmet + rate-limit + CORS + input sanitization');
+  console.log('  HTTPS     : ' + (isSSLEnabled() ? 'Enabled' : 'Disabled (set SSL_ENABLED=true)'));
+  console.log('  Payments  : ' + (payment.isConfigured() ? 'Stripe (live)' : 'Not configured'));
+  console.log('  i18n      : English, Malay, Chinese');
+  console.log('  Logging   : Structured (logs/app.log, logs/error.log, logs/http.log)');
+  console.log('  ===================================');
+  console.log('');
+  console.log('  Default Accounts:');
+  console.log('    operator / op123456     (full access)');
+  console.log('    sarah    / tenant123    (tenant - Sarah Lim)');
+  console.log('    landlord / landlord123  (landlord - Dato Lee Wei)');
+  console.log('    vendor   / vendor123    (vendor - AirCool Services)');
+  console.log('    agent    / agent123     (agent)');
+  console.log('');
+}
