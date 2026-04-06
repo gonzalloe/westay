@@ -76,6 +76,27 @@ async function checkUpdates() {
     summary: { total_outdated: 0, major: 0, minor: 0, patch: 0, critical_vuln: 0, high_vuln: 0, warnings: [] }
   };
 
+  // Package urgency classification
+  const URGENCY = {
+    // 🔴 CRITICAL — auth & security headers — update within 24h
+    jsonwebtoken: { urgency: 'CRITICAL', sla: '24 hours', reason: 'JWT auth tokens' },
+    bcryptjs:     { urgency: 'CRITICAL', sla: '24 hours', reason: 'password hashing' },
+    helmet:       { urgency: 'CRITICAL', sla: '24 hours', reason: 'HTTP security headers' },
+    // 🟡 HIGH — money, framework, DB — update within 1 week
+    express:            { urgency: 'HIGH', sla: '1 week', reason: 'web framework' },
+    stripe:             { urgency: 'HIGH', sla: '1 week', reason: 'payment gateway' },
+    'sql.js':           { urgency: 'HIGH', sla: '1 week', reason: 'database engine' },
+    'express-rate-limit':{ urgency: 'HIGH', sla: '1 week', reason: 'brute-force protection' },
+    // 🟠 MEDIUM — feature libs — update within 1 month
+    nodemailer: { urgency: 'MEDIUM', sla: '1 month', reason: 'email sending' },
+    multer:     { urgency: 'MEDIUM', sla: '1 month', reason: 'file uploads' },
+    cors:       { urgency: 'MEDIUM', sla: '1 month', reason: 'CORS handling' },
+    // 🔵 LOW — stable utilities — update quarterly
+    dotenv: { urgency: 'LOW', sla: 'quarterly', reason: 'env config loader' },
+    // ⚪ DEV — not in production
+    jest: { urgency: 'DEV', sla: 'whenever', reason: 'test framework (dev only)' }
+  };
+  const URGENCY_ICON = { CRITICAL: '🔴', HIGH: '🟡', MEDIUM: '🟠', LOW: '🔵', DEV: '⚪' };
   const SECURITY_CRITICAL = ['express', 'jsonwebtoken', 'bcryptjs', 'helmet', 'stripe', 'nodemailer'];
 
   // ---- 1. Node.js version ----
@@ -216,75 +237,230 @@ async function checkUpdates() {
 
   // ---- Save report ----
   if (!fs.existsSync(REPORT_DIR)) fs.mkdirSync(REPORT_DIR, { recursive: true });
+
+  // ---- Build actionable items ----
+  const actions = []; // { urgency, icon, title, detail, commands[] }
+
+  // Node.js
+  if (report.node.status === 'EOL') {
+    actions.push({
+      urgency: 'CRITICAL', icon: '🔴', title: 'Node.js ' + report.node.current + ' is END OF LIFE',
+      detail: 'No more security patches. Upgrade to ' + (report.node.latestLTS || 'latest LTS') + '.',
+      commands: [
+        'nvm install --lts && nvm alias default node    # if using nvm',
+        'curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs    # Ubuntu/Debian',
+        'npm rebuild && npm test && pm2 restart westay   # after upgrade'
+      ]
+    });
+  } else if (report.node.status === 'outdated') {
+    actions.push({
+      urgency: 'LOW', icon: '🔵', title: 'Node.js ' + report.node.current + ' — newer LTS available: ' + report.node.latestLTS,
+      detail: 'Current version still supported. Upgrade when convenient.',
+      commands: ['nvm install --lts && nvm alias default node && npm rebuild && npm test && pm2 restart westay']
+    });
+  }
+
+  // Outdated packages
+  for (const p of report.packages.outdated) {
+    const u = URGENCY[p.name] || { urgency: 'LOW', sla: 'quarterly', reason: p.name };
+    // Escalate urgency for major updates on critical packages
+    let effectiveUrgency = u.urgency;
+    if (p.severity === 'major' && (u.urgency === 'CRITICAL' || u.urgency === 'HIGH')) {
+      effectiveUrgency = 'CRITICAL';
+    }
+    const icon = URGENCY_ICON[effectiveUrgency] || '⚪';
+    const isMajor = p.severity === 'major';
+
+    actions.push({
+      urgency: effectiveUrgency,
+      icon,
+      title: p.name + '  ' + p.current + ' → ' + p.latest + '  (' + p.severity + ' update)',
+      detail: u.reason + ' — update within ' + u.sla + (isMajor ? '  ⚠️ MAJOR: read changelog before updating!' : ''),
+      commands: isMajor
+        ? [
+            '# ⚠️ Major version — check changelog for breaking changes first',
+            'npm install ' + p.name + '@latest',
+            'npm test    # ALL 106 tests must pass',
+            'pm2 restart westay'
+          ]
+        : [
+            'npm update ' + p.name,
+            'npm test',
+            'pm2 restart westay'
+          ]
+    });
+  }
+
+  // Vulnerabilities
+  for (const v of report.packages.vulnerabilities) {
+    if (v.severity === 'critical' || v.severity === 'high') {
+      actions.push({
+        urgency: 'CRITICAL', icon: '🔴',
+        title: 'SECURITY: ' + v.package + ' — ' + v.title + ' [' + v.severity + ']',
+        detail: 'Known vulnerability' + (v.fixAvailable ? ' — automated fix available' : ' — manual fix needed'),
+        commands: v.fixAvailable
+          ? ['npm audit fix', 'npm test', 'pm2 restart westay']
+          : ['npm audit', '# Check advisory details and update manually', 'npm install ' + v.package + '@latest', 'npm test', 'pm2 restart westay']
+      });
+    }
+  }
+
+  // Stripe SDK
+  if (report.services.stripe.installedSdk && report.services.stripe.latestSdk) {
+    const curMajor = parseInt(report.services.stripe.installedSdk);
+    const latMajor = parseInt(report.services.stripe.latestSdk);
+    if (curMajor < latMajor) {
+      actions.push({
+        urgency: 'HIGH', icon: '🟡',
+        title: 'Stripe SDK  v' + report.services.stripe.installedSdk + ' → v' + report.services.stripe.latestSdk + '  (MAJOR)',
+        detail: 'Payment SDK major update — may have breaking changes. Update within 1 week.',
+        commands: [
+          '# Read changelog: https://github.com/stripe/stripe-node/blob/master/CHANGELOG.md',
+          'npm install stripe@latest',
+          'npm test',
+          '# Test payment: curl http://localhost:3456/api/payments/status -H "Authorization: Bearer <token>"',
+          'pm2 restart westay'
+        ]
+      });
+    } else if (report.services.stripe.installedSdk !== report.services.stripe.latestSdk) {
+      actions.push({
+        urgency: 'MEDIUM', icon: '🟠',
+        title: 'Stripe SDK  v' + report.services.stripe.installedSdk + ' → v' + report.services.stripe.latestSdk + '  (minor/patch)',
+        detail: 'Non-breaking update for payment SDK.',
+        commands: ['npm update stripe', 'npm test', 'pm2 restart westay']
+      });
+    }
+  }
+
+  // Stripe API version reminder
+  if (report.services.stripe.configured) {
+    actions.push({
+      urgency: 'INFO', icon: 'ℹ️',
+      title: 'Stripe API version — check manually',
+      detail: 'Stripe deprecates API versions ~2 years after release.',
+      commands: [
+        '# Check your API version: https://dashboard.stripe.com/developers',
+        '# Compare with latest: https://stripe.com/docs/upgrades#api-versions',
+        '# To upgrade: Dashboard → Developers → API version → Upgrade'
+      ]
+    });
+  }
+
+  // WhatsApp API version
+  if (report.services.whatsapp.configured && report.services.whatsapp.warning) {
+    actions.push({
+      urgency: 'MEDIUM', icon: '🟠',
+      title: 'WhatsApp Meta Graph API — version outdated',
+      detail: report.services.whatsapp.warning,
+      commands: [
+        '# In .env, update the version in WHATSAPP_API_URL:',
+        '# FROM: https://graph.facebook.com/v17.0/{phone_id}/messages',
+        '# TO:   https://graph.facebook.com/v21.0/{phone_id}/messages',
+        '# Check latest: https://developers.facebook.com/docs/graph-api/changelog',
+        'pm2 restart westay'
+      ]
+    });
+  }
+
+  // SSL cert
+  if (report.services.ssl.enabled && report.services.ssl.daysLeft != null) {
+    if (report.services.ssl.daysLeft < 7) {
+      actions.push({
+        urgency: 'CRITICAL', icon: '🔴',
+        title: 'SSL certificate expires in ' + report.services.ssl.daysLeft + ' days!',
+        detail: 'HTTPS will stop working when cert expires. Renew immediately.',
+        commands: [
+          'sudo certbot renew',
+          '# Or replace cert files at SSL_CERT_PATH and SSL_KEY_PATH',
+          'pm2 restart westay'
+        ]
+      });
+    } else if (report.services.ssl.daysLeft < 30) {
+      actions.push({
+        urgency: 'HIGH', icon: '🟡',
+        title: 'SSL certificate expires in ' + report.services.ssl.daysLeft + ' days',
+        detail: 'Schedule renewal within the next 2 weeks.',
+        commands: ['sudo certbot renew', 'pm2 restart westay']
+      });
+    }
+  }
+
+  // Sort actions by urgency
+  const URGENCY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, DEV: 4, INFO: 5 };
+  actions.sort((a, b) => (URGENCY_ORDER[a.urgency] || 9) - (URGENCY_ORDER[b.urgency] || 9));
+
+  // Add actions to report
+  report.actions = actions;
   fs.writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));
 
   // ============================================================
   // PRINT REPORT
   // ============================================================
-  const W = report.summary.warnings;
   console.log('');
-  console.log('  ╔══════════════════════════════════════════════╗');
-  console.log('  ║   WeStay — Dependency & Service Report       ║');
-  console.log('  ║   ' + report.timestamp.slice(0, 19).replace('T', ' ') + '                     ║');
-  console.log('  ╚══════════════════════════════════════════════╝');
+  console.log('  ╔══════════════════════════════════════════════════════════╗');
+  console.log('  ║   WeStay — Dependency & Service Update Report            ║');
+  console.log('  ║   ' + report.timestamp.slice(0, 19).replace('T', ' ') + '                               ║');
+  console.log('  ╚══════════════════════════════════════════════════════════╝');
 
-  // Node
-  console.log('\n  ── Node.js ──');
+  // ── Status Overview ──
+  console.log('\n  ── Status Overview ──');
   const nodeIcon = report.node.status === 'current' ? '✅' : report.node.status === 'EOL' ? '🔴' : '🟡';
-  console.log('  ' + nodeIcon + ' ' + report.node.current + (report.node.latestLTS ? '  (latest LTS: ' + report.node.latestLTS + ')' : ''));
+  console.log('  Node.js:    ' + nodeIcon + ' ' + report.node.current + (report.node.latestLTS && report.node.latestLTS !== 'unknown (offline)' ? '  (LTS: ' + report.node.latestLTS + ')' : ''));
+  console.log('  Packages:   ' + (report.packages.outdated.length === 0 ? '✅ All ' + Object.keys(deps).length + ' up to date' : '📦 ' + report.summary.total_outdated + ' outdated'));
+  console.log('  Vulns:      ' + (report.summary.critical_vuln + report.summary.high_vuln === 0 ? '✅ None' : '🚨 ' + (report.summary.critical_vuln + report.summary.high_vuln) + ' found'));
+  console.log('  Stripe SDK: ' + (report.services.stripe.sdkStatus === 'up to date' ? '✅ v' + report.services.stripe.installedSdk : report.services.stripe.installedSdk ? '📦 ' + report.services.stripe.sdkStatus : '⚪ N/A'));
+  console.log('  Email:      ' + (report.services.email.configured ? '✅ ' + report.services.email.host : '❌ Not configured'));
+  console.log('  WhatsApp:   ' + (report.services.whatsapp.configured ? '✅ Configured' + (report.services.whatsapp.apiVersion ? ' (' + report.services.whatsapp.apiVersion + ')' : '') : '❌ Not configured'));
+  console.log('  SSL:        ' + (report.services.ssl.enabled ? '✅ ' + (report.services.ssl.daysLeft != null ? report.services.ssl.daysLeft + ' days left' : 'Enabled') : '⚪ Disabled'));
 
-  // Packages
-  console.log('\n  ── npm Packages ──');
-  if (report.packages.outdated.length === 0) {
-    console.log('  ✅ All ' + Object.keys(deps).length + ' packages up to date');
+  // ── Action Items ──
+  const realActions = actions.filter(a => a.urgency !== 'INFO');
+  if (realActions.length === 0 && actions.filter(a => a.urgency === 'INFO').length === 0) {
+    console.log('\n  ✅ Everything is up to date. No action required.\n');
   } else {
-    console.log('  📦 ' + report.summary.total_outdated + ' outdated:  ' + report.summary.major + ' major | ' + report.summary.minor + ' minor | ' + report.summary.patch + ' patch');
-    for (const p of report.packages.outdated) {
-      const icon = p.severity === 'major' ? '🔴' : p.severity === 'minor' ? '🟡' : '🔵';
-      const flag = p.securityCritical ? ' ⚠️' : '';
-      console.log('     ' + icon + ' ' + p.name + ': ' + p.current + ' → ' + p.latest + ' (' + p.severity + ')' + flag);
-    }
-  }
-
-  // Vulnerabilities
-  const vulnCount = report.summary.critical_vuln + report.summary.high_vuln;
-  if (vulnCount > 0) {
-    console.log('  🚨 ' + vulnCount + ' vulnerability(ies):');
-    for (const v of report.packages.vulnerabilities) {
-      if (v.severity === 'critical' || v.severity === 'high') {
-        console.log('     - ' + v.package + ': ' + v.title + ' [' + v.severity + ']' + (v.fixAvailable ? ' (fix available)' : ''));
+    if (realActions.length > 0) {
+      console.log('\n  ══ ACTION ITEMS (' + realActions.length + ') — sorted by urgency ══\n');
+      for (let i = 0; i < realActions.length; i++) {
+        const a = realActions[i];
+        console.log('  ─────────────────────────────────────────────');
+        console.log('  ' + a.icon + ' [' + a.urgency + '] ' + a.title);
+        console.log('     ' + a.detail);
+        console.log('     ┌─ How to update:');
+        for (const cmd of a.commands) {
+          console.log('     │  ' + cmd);
+        }
+        console.log('     └─');
       }
     }
-  } else {
-    console.log('  ✅ No known vulnerabilities');
+
+    // Info items (no urgency, just reminders)
+    const infoActions = actions.filter(a => a.urgency === 'INFO');
+    if (infoActions.length > 0) {
+      console.log('\n  ── Reminders ──');
+      for (const a of infoActions) {
+        console.log('  ' + a.icon + ' ' + a.title);
+        console.log('     ' + a.detail);
+        for (const cmd of a.commands) {
+          console.log('     ' + cmd);
+        }
+      }
+    }
   }
 
-  // Stripe
-  console.log('\n  ── Stripe ──');
-  if (report.services.stripe.installedSdk) {
-    const sIcon = report.services.stripe.sdkStatus === 'up to date' ? '✅' : report.services.stripe.sdkStatus.startsWith('MAJOR') ? '🔴' : '🟡';
-    console.log('  ' + sIcon + ' SDK: v' + report.services.stripe.installedSdk + (report.services.stripe.latestSdk ? '  (latest: v' + report.services.stripe.latestSdk + ')' : ''));
-    console.log('     Configured: ' + (report.services.stripe.configured ? 'Yes' : 'No'));
-  } else {
-    console.log('  ℹ️  Not installed');
-  }
-
-  // Services
-  console.log('\n  ── Services ──');
-  console.log('  Email:    ' + (report.services.email.configured ? '✅ ' + report.services.email.host : '❌ Not configured'));
-  console.log('  WhatsApp: ' + (report.services.whatsapp.configured ? '✅ Configured' + (report.services.whatsapp.apiVersion ? ' (' + report.services.whatsapp.apiVersion + ')' : '') : '❌ Not configured'));
-  console.log('  SSL:      ' + (report.services.ssl.enabled ? '✅ Enabled' + (report.services.ssl.daysLeft != null ? ' (' + report.services.ssl.daysLeft + ' days left)' : '') : '⚪ Disabled'));
-
-  // Warnings summary
-  if (W.length > 0) {
-    console.log('\n  ── ⚠️  Action Required (' + W.length + ') ──');
-    for (const w of W) console.log('  • ' + w);
-    console.log('\n  To update packages:  npm update');
-    console.log('  To fix vulns:        npm audit fix');
+  // ── General procedure ──
+  if (realActions.length > 0) {
+    console.log('\n  ══ GENERAL UPDATE PROCEDURE ══');
+    console.log('  1. Back up DB:     cp backend/data/westay.db backend/data/westay-backup-$(date +%Y%m%d).db');
+    console.log('  2. Update:         npm update <package>   OR   npm install <package>@latest');
+    console.log('  3. Test:           npm test   (106 tests must pass)');
+    console.log('  4. Restart:        pm2 restart westay');
+    console.log('  5. Verify:         curl http://localhost:3456/api/auth/login -X POST -H "Content-Type: application/json" -d \'{"username":"admin","password":"admin123456"}\'');
+    console.log('  6. Rollback:       npm install <package>@<old-version> && pm2 restart westay');
   }
 
   console.log('\n  Full JSON report: ' + REPORT_FILE);
-  console.log('  ════════════════════════════════════════════════\n');
+  console.log('  Detailed guide:   versionCheck.md');
+  console.log('  ══════════════════════════════════════════════════════════\n');
 
   if (report.summary.critical_vuln > 0) process.exit(1);
 }
