@@ -321,6 +321,34 @@ app.use('/api', async (req, res, next) => {
   attachWebSocket(server);
 
   dbReady = true;
+
+  // ---- Graceful Shutdown ----
+  function shutdown(signal) {
+    logger.info('Shutdown signal received', { signal });
+    server.close(() => {
+      logger.info('HTTP server closed');
+      getDB().then(db => {
+        if (db && db._save) db._save();
+        logger.info('Database saved — clean exit');
+        process.exit(0);
+      }).catch(() => process.exit(1));
+    });
+    // Force exit after 10s if graceful shutdown hangs
+    setTimeout(() => {
+      logger.error('Forced shutdown after 10s timeout');
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+    shutdown('uncaughtException');
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled rejection', { reason: String(reason) });
+  });
 })();
 
 function printStartupBanner(protocol) {

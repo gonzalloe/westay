@@ -53,13 +53,9 @@ NODE_ENV=production
 
 ---
 
-### A2. No graceful shutdown handler
+### ~~A2. No graceful shutdown handler~~ ✅ FIXED
 
-**Impact:** When the server stops (container restart, deploy, `Ctrl+C`), SQLite may be mid-write → **database corruption**. WebSocket clients disconnect without cleanup. Open HTTP requests get aborted.
-
-**Current `server.js`:** Zero `process.on()` handlers — no SIGTERM, no SIGINT, no uncaughtException, no unhandledRejection.
-
-**Fix:** Add to `server.js` after the server starts (see [§12 in Part B](#12-graceful-shutdown))
+Graceful shutdown added to `server.js` — handles SIGTERM, SIGINT, uncaughtException, unhandledRejection. Saves DB before exit, force-kills after 10s timeout.
 
 ---
 
@@ -849,45 +845,13 @@ describe('Auth routes', () => {
 
 ---
 
-## 12. Graceful Shutdown
+## 12. Graceful Shutdown — ✅ DONE
 
-### Add to `server.js` (after the server starts, inside the async IIFE)
-
-```js
-  // ---- Graceful Shutdown ----
-  function shutdown(signal) {
-    logger.info('Shutdown signal received', { signal });
-
-    // Stop accepting new connections
-    server.close(() => {
-      logger.info('HTTP server closed');
-
-      // Save DB one final time
-      getDB().then(db => {
-        if (db && db._save) db._save();
-        logger.info('Database saved');
-        process.exit(0);
-      }).catch(() => process.exit(1));
-    });
-
-    // Force exit after 10s if graceful shutdown hangs
-    setTimeout(() => {
-      logger.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 10000);
-  }
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception', { error: err.message, stack: err.stack });
-    shutdown('uncaughtException');
-  });
-  process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled rejection', { reason: String(reason) });
-    // Don't shutdown — log and continue (Node 15+ doesn't crash on this by default)
-  });
-```
+Added to `server.js` on 2026-04-06. Handles:
+- `SIGTERM` / `SIGINT` → close server, save DB, exit 0
+- `uncaughtException` → log + shutdown
+- `unhandledRejection` → log only (no crash)
+- Force exit after 10s timeout if graceful close hangs
 
 ---
 
@@ -996,7 +960,7 @@ pm2 start ecosystem.config.js --env production
 [ ] NODE_ENV=production in .env
 [ ] JWT_SECRET changed to random 64+ byte hex
 [ ] CORS_ORIGIN set to actual domain(s)
-[ ] Graceful shutdown handlers added to server.js
+[x] Graceful shutdown handlers added to server.js
 [ ] package.json name fixed, engines field added
 [ ] DB backup cron job configured
 [ ] PM2 or equivalent process manager installed
